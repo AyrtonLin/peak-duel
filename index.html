@@ -224,12 +224,12 @@ const CONFIG = {
     keepBand: [6, 9],
     transformStun: 1.2,
     phase2Hp: 70, phase3Hp: 40,
-    hitRadius: [1.2, 1.35, 1.5], hitHeight: [1.05, 1.15, 1.3]
+    hitRadius: [1.62, 1.82, 2.02], hitHeight: [1.05, 1.15, 1.3]
   },
   skills: {
     ray:    { range: 5,  warn: 0.8, duration: 3, cooldown: 5,  dps: 2, tick: 0.5, trackDeg: 65, missDeg: 24, length: 22 },
-    cheese: { range: 10, warn: 1.0, duration: 5, cooldown: 10, damage: 4, radius: 1.6, interval: 0.85, fallTime: 0.65, fallHeight: 16 },
-    wave:   { range: 10, behindCos: -0.3, warn: 0.5, cooldown: 15, damage: 10, knockback: 10, speed: 11, maxRadius: 16, thickness: 1.2 }
+    cheese: { range: 14, warn: 1.0, duration: 5, cooldown: 10, damage: 4, radius: 2.2, interval: 0.85, fallTime: 0.65, fallHeight: 16 },
+    wave:   { range: 10, warn: 0.5, cooldown: 15, damage: 10, knockback: 10, speed: 11, maxRadius: 16, thickness: 1.2 }
   },
   fx: { shakeDecay: 6 }
 };
@@ -1403,15 +1403,16 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
 F.procParts = F.body.children.filter(c => c !== F.mouthAnchor && c !== F.chargeOrb);
 
 const FROG_PHASE_LOOK = [
-  { body: 0xeed98f, spot: 0xd6b96a, scale: 1.0 },
-  { body: 0xe5c859, spot: 0xcfa94e, scale: 1.14 },
-  { body: 0xf2ede7, spot: 0xd8c8a8, scale: 1.3 }
+  { body: 0xeed98f, spot: 0xd6b96a, scale: 1.35 },
+  { body: 0xe5c859, spot: 0xcfa94e, scale: 1.54 },
+  { body: 0xf2ede7, spot: 0xd8c8a8, scale: 1.76 }
 ];
 function applyFrogPhase(n) {
   const look = FROG_PHASE_LOOK[n - 1];
   F.mats[0].color.setHex(look.body);
   F.mats[4].color.setHex(look.spot);
   F.root.scale.setScalar(look.scale);
+  frog.baseScale = look.scale;
   frog.hitR = CONFIG.enemy.hitRadius[n - 1];
   frog.phase = n;
   // 该阶段有 GLB 模型则隐藏程序化占位部件，否则用占位模型
@@ -1518,8 +1519,8 @@ function setModelStatus(html) { const el = document.getElementById('modelStatus'
 const ec = CONFIG.enemy, sk = CONFIG.skills;
 frog.baseScale = 1;
 
-function clampArena(pos) {
-  const R = CONFIG.world.arenaRadius - 1;
+function clampArena(pos, margin) {
+  const R = CONFIG.world.arenaRadius - (margin || 1);
   const d = Math.hypot(pos.x, pos.z);
   if (d > R) { pos.x *= R / d; pos.z *= R / d; }
 }
@@ -1549,13 +1550,12 @@ function startTransform(n) {
   F.chargeOrb.visible = false;
   hideWaveRings();
   applyFrogPhase(n);
-  frog.baseScale = FROG_PHASE_LOOK[n - 1].scale;
   frog.cds = { ray: 2, cheese: 2, wave: 2 };
   Sfx.phase();
   Shake.add(0.5);
   Particles.spawn(frog.pos.x, 1.2, frog.pos.z, 32, { color: 0xffd76a, color2: 0xffffff, speed: 7, up: 3, life: 0.9, grav: 5 });
   centerMsg(n === 2 ? '奶蛙进入二阶段 · 奶酪轰炸！' : '奶蛙进入三阶段 · 捧腹大笑！');
-  showSkillWarn(n === 2 ? '注意脚下预警圈，袋鼠跳可躲奶酪！' : '站在奶蛙后方小心被声波震飞！');
+  showSkillWarn(n === 2 ? '注意脚下预警圈，袋鼠跳可躲奶酪！' : '声波震击不分方位 —— 波纹扩散时快跳！');
 }
 function deathAnimFrog(dt) {
   frog.deathT += dt;
@@ -1630,14 +1630,12 @@ function updateFrog(dt) {
   else if (dist < ec.keepBand[0]) { mx = -_v1.x * ec.moveSpeed; mz = -_v1.z * ec.moveSpeed; }
   else { mx = -_v1.z * frog.strafeDir * ec.strafeSpeed; mz = _v1.x * frog.strafeDir * ec.strafeSpeed; }
   frog.pos.x += mx * dt; frog.pos.z += mz * dt;
-  clampArena(frog.pos);
+  clampArena(frog.pos, 2.4); // 体型放大后多留身体半径，避免蹭穿围栏
   frog.walkPhase += Math.hypot(mx, mz) * dt * 2.4;
-  // 技能触发
-  _v2.set(Math.sin(frog.yaw), 0, Math.cos(frog.yaw));
-  const behind = _v1.dot(_v2) < sk.wave.behindCos;
+  // 技能触发（不再要求奶蛙背对玩家：任何朝向、任意相对位置均可施放）
   if (frog.phase === 1 && dist <= sk.ray.range && frog.cds.ray <= 0) startCast('ray');
   else if (frog.phase === 2 && dist <= sk.cheese.range && frog.cds.cheese <= 0) startCast('cheese');
-  else if (frog.phase === 3 && dist <= sk.wave.range && behind && frog.cds.wave <= 0) startCast('wave');
+  else if (frog.phase === 3 && dist <= sk.wave.range && frog.cds.wave <= 0) startCast('wave');
   animateFrog(dt, Math.hypot(mx, mz) > 0.15, 'normal');
   F.root.position.copy(frog.pos);
   F.root.rotation.y = frog.yaw;
@@ -1825,7 +1823,7 @@ function updateCheeseCast(c, dt) {
     // 被袋鼠跳闪避后失去锁定：后续落点固定在闪避位置附近，不再跟随玩家
     const bx = c.locked ? c.lockX : player.pos.x;
     const bz = c.locked ? c.lockZ : player.pos.z;
-    Cheeses.spawn(bx + rand(-1.8, 1.8), bz + rand(-1.8, 1.8));
+    Cheeses.spawn(bx + rand(-3.2, 3.2), bz + rand(-3.2, 3.2));
   }
   animateFrog(dt, false, 'castCheese');
   if (c.t <= 0) endCast();
@@ -1928,7 +1926,7 @@ const Cheeses = (() => {
     it.x = x; it.z = z; it.hit = false;
     it.mk.position.set(x, 0.03, z);
     it.mk.visible = true;
-    it.mk.scale.setScalar(1.45);
+    it.mk.scale.setScalar(sk.cheese.radius * 0.95);
     it.blob.material.opacity = 0;
     it.blob.scale.setScalar(0.3);
     it.g.visible = false;
@@ -1940,7 +1938,7 @@ const Cheeses = (() => {
       if (it.state === 'warn') {
         it.t -= dt;
         const k = clamp(it.t / sk.cheese.warn, 0, 1);
-        it.mk.scale.setScalar(1.45 - (1 - k) * 0.45);
+        it.mk.scale.setScalar(sk.cheese.radius * 0.95 - (1 - k) * 0.45);
         it.ringM.opacity = 0.5 + Math.abs(Math.sin(it.t * 12)) * 0.45;
         it.discM.opacity = 0.15 + Math.abs(Math.sin(it.t * 12)) * 0.2;
         if (it.t <= 0) {
@@ -1968,7 +1966,7 @@ const Cheeses = (() => {
           it.blob.material.opacity = 0;
           Sfx.cheeseSplat();
           Particles.spawn(it.x, 0.25, it.z, 14, { color: 0xffd54f, color2: 0xfff2b0, speed: 5, up: 3, life: 0.5, grav: 10 });
-          Shockwaves.spawn(it.x, it.z, 0xffe9a8, 2.6, 0.4);
+          Shockwaves.spawn(it.x, it.z, 0xffe9a8, 3.4, 0.4);
           const d = Math.hypot(player.pos.x - it.x, player.pos.z - it.z);
           Shake.add(d < 4 ? 0.22 : 0.07);
           if (!it.hit && d < sk.cheese.radius) {
@@ -2314,7 +2312,6 @@ function resetGame() {
   F.eyeL.scale.y = F.eyeR.scale.y = 1;
   F.mouth.scale.set(1, 1, 1);
   applyFrogPhase(1);
-  frog.baseScale = 1;
   F.mats.forEach(m => m.emissive.setHex(0x000000));
   hideBeam(); hideWaveRings();
   F.chargeOrb.visible = false;
