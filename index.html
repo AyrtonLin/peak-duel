@@ -168,6 +168,10 @@ body.touch.portrait #rotateHint { display: block; }
     <input type="file" id="modelPicker" accept=".glb" multiple style="display:none">
     <span id="modelStatus">内置占位模型运行中 · 将 Meshy 生成的 P1~P5.glb 放入 assets/ 目录可自动加载，或点击左侧按钮手动选择</span>
   </div>
+  <div class="modelRow">
+    <button class="miniBtn" id="shareBtn" type="button">复制分享链接</button>
+    <span id="shareTxt" style="color:#9fe08a">https://ayrtonlin.github.io/peak-duel/</span>
+  </div>
   <div class="hint">建议使用 Chrome / Edge 全屏游玩 · 需联网加载 Three.js · 触屏设备自动启用虚拟摇杆<br>手机与电脑连同一 WiFi：电脑上双击「手机访问.bat」，按手机浏览器打开提示的网址即可用手机游玩</div>
 </div>
 <div id="endScreen" class="screen" style="display:none">
@@ -2144,6 +2148,27 @@ Models.init();
   });
 })();
 window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame };
+// 分享链接一键复制
+(function wireShare() {
+  const url = 'https://ayrtonlin.github.io/peak-duel/';
+  const btn = document.getElementById('shareBtn');
+  const txt = document.getElementById('shareTxt');
+  if (txt) txt.textContent = url;
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const done = () => { btn.textContent = '已复制！'; setTimeout(() => { btn.textContent = '复制分享链接'; }, 1600); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(() => { fallbackCopy(url); done(); });
+    } else { fallbackCopy(url); done(); }
+  });
+  function fallbackCopy(s) {
+    const ta = document.createElement('textarea');
+    ta.value = s; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+})();
 requestAnimationFrame(tick);
 })();
 </script>
