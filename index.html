@@ -156,11 +156,13 @@ body.touch.portrait #rotateHint { display: block; }
   </div>
   <div class="controls">
     <b>WASD</b> 移动 &nbsp;·&nbsp; <b>鼠标</b> 转视角 &nbsp;·&nbsp; <b>左键(按住)</b> 开火 &nbsp;·&nbsp; <b>空格</b> 袋鼠跳（起跳后 0.4 秒无敌免控！）<br>
-    目标：只打奶蛙的<b>正面</b>！背部无敌会弹开子弹 &nbsp;·&nbsp; 看到技能预警就抓准时机起跳闪避
+    目标：只打奶蛙的<b>正面</b>！背部无敌会弹开子弹 &nbsp;·&nbsp; 奶蛙转身不快，<b>贴身绕行</b>可抢到它正面<br>
+    技巧：技能预警亮起时起跳闪避——<b>跳跃闪避成功后，奶蛙技能会失去锁定</b>，不再追着你打
   </div>
   <div id="touchHint">
     <b>左半屏</b> 虚拟摇杆移动 · <b>右半屏</b> 滑动转视角 · <b>红色按钮</b> 按住开火 · <b>蓝色按钮</b> 袋鼠跳（起跳 0.4 秒无敌）<br>
-    目标：只打奶蛙的<b>正面</b>！背部无敌会弹开子弹 · 看到技能预警就抓准时机起跳闪避
+    目标：只打奶蛙的<b>正面</b>！背部无敌会弹开子弹 · 奶蛙转身不快，<b>贴身绕行</b>可抢到它正面<br>
+    技巧：技能预警亮起时起跳闪避——<b>跳跃闪避成功后，奶蛙技能会失去锁定</b>，不再追着你打
   </div>
   <button class="bigBtn" id="startBtn">开始对决</button>
   <div class="modelRow">
@@ -216,8 +218,8 @@ const CONFIG = {
   },
   enemy: {
     maxHp: 100,
-    turnSpeed: 100,          // 度/秒：背对玩家的回正速度
-    faceTurnSpeed: 260,      // 度/秒：施放射线时的转身速度
+    turnSpeed: 40,           // 度/秒：背对玩家的回正速度（已放慢：横向绕行走位可抢到奶蛙正面）
+    faceTurnSpeed: 160,      // 度/秒：施放射线时的转身速度（预警期间走位可甩开瞄准）
     moveSpeed: 2.6, strafeSpeed: 2.2, strafeSwitch: [1.8, 3.6],
     keepBand: [6, 9],
     transformStun: 1.2,
@@ -1517,23 +1519,25 @@ function updateRayCast(c, dt) {
     }
     return;
   }
-  // active：追踪射线
+  // active：追踪射线（被袋鼠跳闪避后失去锁定：光束方向冻结，不再追踪玩家）
   c.t -= dt;
   F.mouthAnchor.getWorldPosition(_v2);
   _v3.copy(player.pos).setY(player.pos.y + 1.1).sub(_v2);
   const pdist = _v3.length();
   if (pdist > 0.001) _v3.divideScalar(pdist);
-  const track = sk.ray.trackDeg * Math.PI / 180 * dt;
-  const curYaw = Math.atan2(c.beamDir.x, c.beamDir.z);
-  const tgtYaw = Math.atan2(_v3.x, _v3.z);
-  const curPitch = Math.atan2(Math.hypot(c.beamDir.x, c.beamDir.z), c.beamDir.y);
-  const tgtPitch = Math.atan2(Math.hypot(_v3.x, _v3.z), _v3.y);
-  const newYaw = curYaw + clamp(angleDiff(curYaw, tgtYaw), -track, track);
-  const newPitch = curPitch + clamp(angleDiff(curPitch, tgtPitch), -track, track);
-  c.beamDir.set(Math.sin(newYaw) * Math.sin(newPitch), Math.cos(newPitch), Math.cos(newYaw) * Math.sin(newPitch)).normalize();
-  frog.yaw = newYaw;
-  F.root.rotation.y = frog.yaw;
-  const len = Math.min(pdist + 1.5, sk.ray.length);
+  if (!c.locked) {
+    const track = sk.ray.trackDeg * Math.PI / 180 * dt;
+    const curYaw = Math.atan2(c.beamDir.x, c.beamDir.z);
+    const tgtYaw = Math.atan2(_v3.x, _v3.z);
+    const curPitch = Math.atan2(Math.hypot(c.beamDir.x, c.beamDir.z), c.beamDir.y);
+    const tgtPitch = Math.atan2(Math.hypot(_v3.x, _v3.z), _v3.y);
+    const newYaw = curYaw + clamp(angleDiff(curYaw, tgtYaw), -track, track);
+    const newPitch = curPitch + clamp(angleDiff(curPitch, tgtPitch), -track, track);
+    c.beamDir.set(Math.sin(newYaw) * Math.sin(newPitch), Math.cos(newPitch), Math.cos(newYaw) * Math.sin(newPitch)).normalize();
+    frog.yaw = newYaw;
+    F.root.rotation.y = frog.yaw;
+  }
+  const len = c.locked ? sk.ray.length : Math.min(pdist + 1.5, sk.ray.length);
   updateBeam(_v2, c.beamDir, len);
   // 命中判定：夹角小于阈值则每 tick 造成伤害
   const miss = Math.acos(clamp(c.beamDir.dot(_v3), -1, 1));
@@ -1546,6 +1550,11 @@ function updateRayCast(c, dt) {
         Particles.spawn(player.pos.x, player.pos.y + 1.2, player.pos.z, 5, { color: 0xffffff, color2: 0xd8ecff, speed: 3, life: 0.3, grav: 2 });
       }
     }
+    // 袋鼠跳闪避成功：射线失去锁定（当 tick 到来时玩家处于跳跃无敌中）
+    if (player.jumpInv > 0 && !player.dead && !c.locked) {
+      c.locked = true;
+      showSkillWarn('射线被袋鼠跳闪避，失去锁定！');
+    }
   }
   if (c.t <= 0) endCast();
 }
@@ -1555,7 +1564,10 @@ function updateCheeseCast(c, dt) {
   c.spawnT -= dt;
   if (c.spawnT <= 0 && c.t > 0.3) {
     c.spawnT = sk.cheese.interval;
-    Cheeses.spawn(player.pos.x + rand(-1.8, 1.8), player.pos.z + rand(-1.8, 1.8));
+    // 被袋鼠跳闪避后失去锁定：后续落点固定在闪避位置附近，不再跟随玩家
+    const bx = c.locked ? c.lockX : player.pos.x;
+    const bz = c.locked ? c.lockZ : player.pos.z;
+    Cheeses.spawn(bx + rand(-1.8, 1.8), bz + rand(-1.8, 1.8));
   }
   animateFrog(dt, false, 'castCheese');
   if (c.t <= 0) endCast();
@@ -1701,9 +1713,17 @@ const Cheeses = (() => {
           Shockwaves.spawn(it.x, it.z, 0xffe9a8, 2.6, 0.4);
           const d = Math.hypot(player.pos.x - it.x, player.pos.z - it.z);
           Shake.add(d < 4 ? 0.22 : 0.07);
-          if (!it.hit && d < sk.cheese.radius && !playerInvincible()) {
+          if (!it.hit && d < sk.cheese.radius) {
             it.hit = true;
-            damagePlayer(sk.cheese.damage, 'cheese');
+            if (!playerInvincible()) {
+              damagePlayer(sk.cheese.damage, 'cheese');
+            } else if (!player.dead && frog.cast && frog.cast.type === 'cheese' && !frog.cast.locked) {
+              // 袋鼠跳闪避成功（在圈内但跳跃无敌中）：奶酪雨失去锁定
+              frog.cast.locked = true;
+              frog.cast.lockX = player.pos.x;
+              frog.cast.lockZ = player.pos.z;
+              showSkillWarn('奶酪雨被袋鼠跳闪避，失去锁定！');
+            }
           }
         }
         continue;
