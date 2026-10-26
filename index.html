@@ -217,19 +217,19 @@ const CONFIG = {
     camBack: 4.8, camUp: 2.5, camRight: 1.0, pitchMin: -0.55, pitchMax: 0.5, mouseSens: 0.0021
   },
   enemy: {
-    maxHp: 100,
+    maxHp: 200,
     turnSpeed: 25,           // 度/秒：背对玩家的回正速度（已放慢：横向绕行走位可抢到奶蛙正面）
     faceTurnSpeed: 110,      // 度/秒：施放射线时的转身速度（预警期间走位可甩开瞄准）
     moveSpeed: 2.6, strafeSpeed: 2.2, strafeSwitch: [1.8, 3.6],
     keepBand: [6, 9],
     transformStun: 1.2,
-    phase2Hp: 70, phase3Hp: 40,
+    phase2Hp: 140, phase3Hp: 80,
     hitRadius: [1.62, 1.82, 2.02], hitHeight: [1.05, 1.15, 1.3]
   },
   skills: {
-    ray:    { range: 5,  warn: 0.8, duration: 3, cooldown: 5,  dps: 2, tick: 0.5, trackDeg: 65, missDeg: 24, length: 22 },
-    cheese: { range: 14, warn: 1.0, duration: 5, cooldown: 10, damage: 4, radius: 2.2, interval: 0.85, fallTime: 0.65, fallHeight: 16 },
-    wave:   { range: 10, warn: 0.5, cooldown: 15, damage: 10, knockback: 10, speed: 11, maxRadius: 16, thickness: 1.2 }
+    ray:    { range: 5,  warn: 0.8, duration: 3, cooldown: 3,  dps: 2, tick: 0.5, trackDeg: 65, missDeg: 24, length: 22 },
+    cheese: { range: 14, warn: 1.0, duration: 5, cooldown: 6, damage: 4, radius: 2.2, interval: 0.85, fallTime: 0.65, fallHeight: 16 },
+    wave:   { range: 10, warn: 0.5, cooldown: 9, damage: 10, knockback: 10, speed: 11, maxRadius: 16, thickness: 1.2 }
   },
   fx: { shakeDecay: 6 }
 };
