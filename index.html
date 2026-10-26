@@ -377,17 +377,42 @@ function std(color, opt) { return new THREE.MeshStandardMaterial(Object.assign({
 function basic(color, opt) { return new THREE.MeshBasicMaterial(Object.assign({ color: color }, opt || {})); }
 function mesh(geo, mat, x, y, z) { const m = new THREE.Mesh(geo, mat); m.position.set(x || 0, y || 0, z || 0); return m; }
 
-/* ---------- 天空 ---------- */
+/* ---------- 天空（渐变穹顶 + 太阳光晕 + 夜星） ---------- */
 const worldRefs = {};
+const worldAnims = { flags: [], birds: [], blades: null, balloon: null, motes: null, pondMat: null };
+let worldT = 0;
 (function buildSky() {
   const cv = document.createElement('canvas'); cv.width = 16; cv.height = 256;
   const g = cv.getContext('2d');
   const gr = g.createLinearGradient(0, 0, 0, 256);
-  gr.addColorStop(0, '#3f97e6'); gr.addColorStop(0.45, '#8fd0f7'); gr.addColorStop(0.72, '#d9f0ff'); gr.addColorStop(1, '#f0f7e6');
+  gr.addColorStop(0, '#2f86d8'); gr.addColorStop(0.35, '#6fb8ef'); gr.addColorStop(0.62, '#a8d9f8');
+  gr.addColorStop(0.8, '#dceffc'); gr.addColorStop(0.92, '#eef6e4'); gr.addColorStop(1, '#f4f7dc');
   g.fillStyle = gr; g.fillRect(0, 0, 16, 256);
   const sky = new THREE.Mesh(new THREE.SphereGeometry(170, 24, 14), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), side: THREE.BackSide, fog: false }));
   scene.add(sky);
   worldRefs.skyMat = sky.material;
+  // 太阳光晕（始终朝向镜头的加色精灵，与主光同方向）
+  const sc = document.createElement('canvas'); sc.width = sc.height = 128;
+  const sg = sc.getContext('2d');
+  const rg = sg.createRadialGradient(64, 64, 0, 64, 64, 64);
+  rg.addColorStop(0, 'rgba(255,255,242,1)'); rg.addColorStop(0.22, 'rgba(255,246,205,0.9)');
+  rg.addColorStop(0.55, 'rgba(255,232,160,0.3)'); rg.addColorStop(1, 'rgba(255,224,150,0)');
+  sg.fillStyle = rg; sg.fillRect(0, 0, 128, 128);
+  const sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(sc), blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  sunSpr.position.set(60, 78, 40); sunSpr.scale.setScalar(46);
+  scene.add(sunSpr);
+  worldRefs.sunSpr = sunSpr;
+  // 夜星（三阶段黄昏时浮现）
+  const starPts = [];
+  for (let i = 0; i < 140; i++) {
+    const a = rand(0, TAU), e = rand(0.15, 1.35), r = 150;
+    starPts.push(Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r, Math.sin(a) * Math.cos(e) * r);
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPts, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0xfff6e0, size: 0.9, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+  scene.add(new THREE.Points(starGeo, starMat));
+  worldRefs.starMat = starMat;
 })();
 
 /* ---------- 地面 ---------- */
@@ -398,6 +423,11 @@ const worldRefs = {};
   for (let i = 0; i < 300; i++) {
     g.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '120,190,105,' : '150,215,120,') + rand(0.04, 0.14).toFixed(2) + ')';
     g.beginPath(); g.arc(Math.random() * 1024, Math.random() * 1024, rand(24, 90), 0, TAU); g.fill();
+  }
+  // 泥土斑驳肌理
+  for (let i = 0; i < 26; i++) {
+    g.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '140,110,75,' : '175,150,95,') + rand(0.05, 0.13).toFixed(2) + ')';
+    g.beginPath(); g.ellipse(Math.random() * 1024, Math.random() * 1024, rand(12, 42), rand(8, 26), rand(0, TAU), 0, TAU); g.fill();
   }
   g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 5;
   [90, 180, 270].forEach(r => { g.beginPath(); g.arc(512, 512, r, 0, TAU); g.stroke(); });
@@ -418,37 +448,98 @@ const worldRefs = {};
   const under = mesh(new THREE.CircleGeometry(200, 32), basic(0x7bb96b), 0, -0.05, 0);
   under.rotation.x = -Math.PI / 2;
   scene.add(under);
+  // 野花（一次绘制的实例化小球，逐实例配色）
+  const flowerN = IS_TOUCH ? 50 : 90;
+  const flowers = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 6, 5), new THREE.MeshLambertMaterial({ color: 0xffffff }), flowerN);
+  const fcols = [new THREE.Color(0xfff2f2), new THREE.Color(0xffd94f), new THREE.Color(0xffb0c8), new THREE.Color(0xbfe0ff)];
+  const fd = new THREE.Object3D();
+  for (let i = 0; i < flowerN; i++) {
+    const a = rand(0, TAU), r = Math.sqrt(Math.random()) * (CONFIG.world.arenaRadius - 1.5);
+    fd.position.set(Math.sin(a) * r, 0.07, Math.cos(a) * r);
+    fd.rotation.set(0, 0, 0);
+    const s = rand(0.7, 1.3);
+    fd.scale.set(s, s, s);
+    fd.updateMatrix();
+    flowers.setMatrixAt(i, fd.matrix);
+    flowers.setColorAt(i, fcols[i % 4]);
+  }
+  flowers.instanceMatrix.needsUpdate = true;
+  if (flowers.instanceColor) flowers.instanceColor.needsUpdate = true;
+  scene.add(flowers);
 })();
 
-/* ---------- 围栏 ---------- */
+/* ---------- 围栏（双层横杆 + 彩旗 + 四角对决横幅） ---------- */
 (function buildFence() {
   const R = CONFIG.world.arenaRadius;
   const postMat = std(0xf5f5f0), capMat = std(0xe05545);
-  for (let i = 0; i < 18; i++) {
-    const a = i / 18 * TAU;
-    const p = mesh(new THREE.BoxGeometry(0.34, 1.5, 0.34), postMat, Math.sin(a) * R, 0.75, Math.cos(a) * R);
+  // 三角旗形状（旗杆边在 x=0，旗尖朝 +x）
+  const tri = new THREE.Shape();
+  tri.moveTo(0, 0.17); tri.lineTo(0, -0.17); tri.lineTo(0.55, 0);
+  const pennantGeo = new THREE.ShapeGeometry(tri);
+  const pennantCols = [0xe05545, 0x4f8fe0, 0xe8b34a, 0x62c46a];
+  const N = 26;
+  for (let i = 0; i < N; i++) {
+    const a = i / N * TAU;
+    const x = Math.sin(a) * R, z = Math.cos(a) * R;
+    const p = mesh(new THREE.BoxGeometry(0.34, 1.5, 0.34), postMat, x, 0.75, z);
+    p.rotation.y = -a;
     p.castShadow = true; scene.add(p);
-    scene.add(mesh(new THREE.SphereGeometry(0.26, 10, 8), capMat, Math.sin(a) * R, 1.58, Math.cos(a) * R));
+    scene.add(mesh(new THREE.SphereGeometry(0.26, 10, 8), capMat, x, 1.58, z));
+    // 每根柱子挂一面三角旗，随微风摆动
+    const flag = new THREE.Mesh(pennantGeo, new THREE.MeshBasicMaterial({ color: pennantCols[i % 4], side: THREE.DoubleSide }));
+    flag.position.set(x, 1.32, z);
+    flag.userData = { baseYaw: -a + Math.PI / 2, off: i, amp: 0.3 };
+    worldAnims.flags.push(flag);
+    scene.add(flag);
   }
-  const ring = mesh(new THREE.TorusGeometry(R, 0.09, 8, 96), std(0xf5f5f0, { roughness: 0.5 }), 0, 1.1, 0);
-  ring.rotation.x = Math.PI / 2;
-  scene.add(ring);
+  // 双层横杆
+  [0.55, 1.1].forEach(h => {
+    const ring = mesh(new THREE.TorusGeometry(R, 0.07, 8, 96), std(0xf5f5f0, { roughness: 0.5 }), 0, h, 0);
+    ring.rotation.x = Math.PI / 2;
+    scene.add(ring);
+  });
+  // 四角大横幅：奶 VS 肥
+  const bannerTex = (txt, bg) => {
+    const c = document.createElement('canvas'); c.width = 96; c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = bg; g.fillRect(0, 0, 96, 128);
+    g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 5; g.strokeRect(5, 5, 86, 118);
+    g.fillStyle = '#fff'; g.font = 'bold 60px "Microsoft YaHei", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(txt, 48, 66);
+    return new THREE.CanvasTexture(c);
+  };
+  const corners = [
+    { a: Math.PI / 4, txt: '奶', bg: '#c23b2e' },
+    { a: Math.PI * 3 / 4, txt: '肥', bg: '#2e5fc2' },
+    { a: Math.PI * 5 / 4, txt: '奶', bg: '#c23b2e' },
+    { a: Math.PI * 7 / 4, txt: '肥', bg: '#2e5fc2' }
+  ];
+  corners.forEach(cn => {
+    const x = Math.sin(cn.a) * (R - 0.28), z = Math.cos(cn.a) * (R - 0.28);
+    const b = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 1.04), new THREE.MeshBasicMaterial({ map: bannerTex(cn.txt, cn.bg), side: THREE.DoubleSide }));
+    b.position.set(x, 1.0, z);
+    b.userData = { baseYaw: cn.a + Math.PI, off: cn.a * 3, amp: 0.1 };
+    worldAnims.flags.push(b);
+    scene.add(b);
+  });
 })();
 
-/* ---------- 云朵 ---------- */
+/* ---------- 云朵（缓慢环绕漂移，材质随阶段染色） ---------- */
 const cloudSpin = new THREE.Group();
 (function buildClouds() {
   scene.add(cloudSpin);
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  for (let i = 0; i < 7; i++) {
+  worldRefs.cloudMat = mat;
+  for (let i = 0; i < 10; i++) {
     const g = new THREE.Group();
-    const n = 2 + Math.floor(Math.random() * 2);
+    const n = 2 + Math.floor(Math.random() * 3);
     for (let j = 0; j < n; j++) {
       const s = mesh(new THREE.SphereGeometry(rand(3, 5.5), 10, 8), mat, j * rand(3, 5) - n * 2, rand(-0.5, 0.8), rand(-2, 2));
       s.scale.y = 0.55;
       g.add(s);
     }
-    const a = i / 7 * TAU + rand(0, 0.5);
+    const a = i / 10 * TAU + rand(0, 0.5);
     g.position.set(Math.sin(a) * rand(55, 95), rand(24, 40), Math.cos(a) * rand(55, 95));
     cloudSpin.add(g);
   }
@@ -532,6 +623,116 @@ const cloudSpin = new THREE.Group();
   scene.add(grass);
 })();
 
+/* ---------- 地标与生灵：风车 / 奶塘 / 热气球 / 飞鸟 / 漂浮花粉 ---------- */
+(function buildLandmarks() {
+  // —— 风车（叶片常转，地标视觉锚点）——
+  const mill = new THREE.Group();
+  const tower = mesh(new THREE.CylinderGeometry(1.0, 1.9, 11, 10), std(0xd8c9a8, { roughness: 0.85 }), 0, 5.5, 0);
+  tower.castShadow = true; mill.add(tower);
+  mill.add(mesh(new THREE.ConeGeometry(1.5, 1.8, 10), std(0xb0543c), 0, 11.8, 0));
+  mill.add(mesh(new THREE.BoxGeometry(0.8, 1.5, 0.12), std(0x6a4a30), 0, 0.75, 1.86));
+  mill.add(mesh(new THREE.BoxGeometry(0.5, 0.6, 0.1), basic(0xfff3c8), 0, 6.6, 1.06));
+  const hub = new THREE.Group(); hub.position.set(0, 10.4, 1.5);
+  for (let i = 0; i < 4; i++) {
+    const piv = new THREE.Group(); piv.rotation.z = i * Math.PI / 2;
+    const blade = mesh(new THREE.BoxGeometry(0.5, 4.6, 0.1), i % 2 ? std(0xf3ead6) : std(0xd0645a), 0, 2.6, 0);
+    blade.castShadow = true; piv.add(blade);
+    hub.add(piv);
+  }
+  hub.add(mesh(new THREE.SphereGeometry(0.35, 10, 8), std(0x74513a)));
+  mill.add(hub);
+  mill.position.set(31, 0, -27);
+  mill.rotation.y = Math.atan2(-31, 27);
+  scene.add(mill);
+  worldAnims.blades = hub;
+  // —— 奶塘（微反光奶池 + 芦苇 + 围石）——
+  const pond = new THREE.Group();
+  const pondM = new THREE.MeshStandardMaterial({ color: 0xeef7ff, roughness: 0.12, metalness: 0.6, transparent: true, opacity: 0.9 });
+  const pw = mesh(new THREE.CircleGeometry(3.4, 36), pondM, 0, 0.06, 0);
+  pw.rotation.x = -Math.PI / 2; pond.add(pw);
+  const rim = mesh(new THREE.TorusGeometry(3.4, 0.2, 8, 36), std(0xa8b5a2), 0, 0.06, 0);
+  rim.rotation.x = Math.PI / 2; pond.add(rim);
+  const reedM = std(0x7ba24f);
+  for (let i = 0; i < 7; i++) {
+    const a = rand(0, TAU), rr = rand(2.9, 3.3);
+    const rx = Math.cos(a) * rr, rz = Math.sin(a) * rr;
+    const reed = mesh(new THREE.CylinderGeometry(0.03, 0.05, 1.3, 5), reedM, rx, 0.62, rz);
+    reed.rotation.z = rand(-0.16, 0.16); reed.rotation.x = rand(-0.16, 0.16);
+    pond.add(reed);
+    pond.add(mesh(new THREE.ConeGeometry(0.08, 0.3, 5), std(0x8a6a3e), rx + rand(-0.06, 0.06), 1.3, rz));
+  }
+  const rockM2 = std(0x9aa5a3);
+  for (let i = 0; i < 5; i++) {
+    const a = i / 5 * TAU + 0.35;
+    pond.add(mesh(new THREE.DodecahedronGeometry(rand(0.25, 0.45)), rockM2, Math.cos(a) * 3.9, 0.16, Math.sin(a) * 3.9));
+  }
+  pond.position.set(-27, 0, 24);
+  scene.add(pond);
+  worldAnims.pondMat = pondM;
+  // —— 热气球（环绕场地缓缓漂移）——
+  const bal = new THREE.Group();
+  const env = mesh(new THREE.SphereGeometry(2.6, 14, 12), std(0xe0704f, { roughness: 0.6 }));
+  env.scale.y = 1.15; bal.add(env);
+  bal.add(mesh(new THREE.ConeGeometry(0.5, 0.8, 10), std(0xf3d99a), 0, 3.2, 0));
+  const basket = mesh(new THREE.BoxGeometry(0.8, 0.6, 0.8), std(0x9a7440), 0, -3.5, 0);
+  bal.add(basket);
+  const ropeM = std(0x6a5a3a);
+  [[-0.38, 0.38], [0.38, 0.38], [-0.38, -0.38], [0.38, -0.38]].forEach(rp => {
+    bal.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 2.2, 4), ropeM, rp[0], -2.3, rp[1]));
+  });
+  bal.position.set(Math.sin(2.1) * 52, 26, Math.cos(2.1) * 52);
+  scene.add(bal);
+  worldAnims.balloon = bal;
+  // —— 飞鸟（远处盘旋 + 扇翅）——
+  const wingMat = new THREE.MeshLambertMaterial({ color: 0x39434e, side: THREE.DoubleSide });
+  const mkWing = (dir) => {
+    const piv = new THREE.Group();
+    const w = mesh(new THREE.PlaneGeometry(0.55, 0.22), wingMat, 0.28 * dir, 0, 0);
+    w.rotation.x = -Math.PI / 2;
+    piv.add(w);
+    return piv;
+  };
+  const birdN = IS_TOUCH ? 3 : 5;
+  for (let i = 0; i < birdN; i++) {
+    const b = new THREE.Group();
+    const wl = mkWing(1), wr = mkWing(-1);
+    b.add(wl); b.add(wr);
+    b.userData = { wl: wl, wr: wr, phase: i * 1.3, r: rand(34, 44), h: rand(22, 30), spd: rand(0.1, 0.16), a0: rand(0, TAU) };
+    scene.add(b);
+    worldAnims.birds.push(b);
+  }
+  // —— 漂浮花粉（一整片点云缓慢环流，黄昏化为紫色浮尘）——
+  const marr = [];
+  const mn = IS_TOUCH ? 45 : 80;
+  for (let i = 0; i < mn; i++) {
+    const a = rand(0, TAU), r = Math.sqrt(Math.random()) * 19;
+    marr.push(Math.sin(a) * r, rand(0.3, 5.5), Math.cos(a) * r);
+  }
+  const mgeo = new THREE.BufferGeometry();
+  mgeo.setAttribute('position', new THREE.Float32BufferAttribute(marr, 3));
+  const motesMat = new THREE.PointsMaterial({ color: 0xfff4c0, size: 0.09, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
+  const motes = new THREE.Points(mgeo, motesMat);
+  scene.add(motes);
+  worldAnims.motes = motes;
+  worldRefs.motesMat = motesMat;
+  // —— 灯柱光晕（三阶段夜幕下点亮）——
+  const hc = document.createElement('canvas'); hc.width = hc.height = 64;
+  const hg = hc.getContext('2d');
+  const hrg = hg.createRadialGradient(32, 32, 0, 32, 32, 32);
+  hrg.addColorStop(0, 'rgba(255,238,170,0.95)'); hrg.addColorStop(1, 'rgba(255,238,170,0)');
+  hg.fillStyle = hrg; hg.fillRect(0, 0, 64, 64);
+  const haloTex = new THREE.CanvasTexture(hc);
+  worldRefs.lampHalos = [];
+  for (let i = 0; i < 4; i++) {
+    const a = i / 4 * TAU + 0.4;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
+    s.position.set(Math.sin(a) * 17.5, 3.5, Math.cos(a) * 17.5);
+    s.scale.setScalar(2.4);
+    scene.add(s);
+    worldRefs.lampHalos.push(s);
+  }
+})();
+
 /* ---------- 阶段氛围（雾/天空/光照随奶蛙阶段过渡） ---------- */
 const ATMO = [
   { fog: 0xcfe8f7, skyTint: 0xffffff, sun: 0xfff4d6, sunI: 1.15, hemiI: 0.85 },  // 一阶段：晴日
@@ -548,6 +749,30 @@ function updateAtmo(dt) {
   sun.color.lerp(_atmoC.setHex(t.sun), k);
   sun.intensity += (t.sunI - sun.intensity) * k;
   hemi.intensity += (t.hemiI - hemi.intensity) * k;
+  // 云朵随阶段染色
+  if (worldRefs.cloudMat) {
+    worldRefs.cloudMat.color.lerp(_atmoC.setHex(frog.phase === 3 ? 0x8a7395 : frog.phase === 2 ? 0xffe6b8 : 0xffffff), k);
+  }
+  // 太阳光晕随主光变色
+  if (worldRefs.sunSpr) worldRefs.sunSpr.material.color.lerp(_atmoC.setHex(t.sun), k);
+  // 灯柱光晕：越到夜晚越亮，三阶段带烛光闪烁
+  if (worldRefs.lampHalos) {
+    const tgt = frog.phase === 3 ? 0.85 : frog.phase === 2 ? 0.45 : 0.26;
+    worldRefs.lampHalos.forEach((h, i) => {
+      const flick = frog.phase === 3 ? 0.72 + Math.sin(worldT * 7 + i * 2.1) * 0.28 : 1;
+      h.material.opacity += (tgt * flick - h.material.opacity) * Math.min(1, k * 3);
+    });
+  }
+  // 三阶段夜星浮现
+  if (worldRefs.starMat) {
+    const st = frog.phase === 3 ? 0.85 : 0;
+    worldRefs.starMat.opacity += (st - worldRefs.starMat.opacity) * Math.min(1, k * 0.8);
+  }
+  // 花粉：白→金→暮紫
+  if (worldRefs.motesMat) {
+    worldRefs.motesMat.color.lerp(_atmoC.setHex(frog.phase === 3 ? 0xc9a8e8 : frog.phase === 2 ? 0xffd9a0 : 0xfff4c0), k);
+    worldRefs.motesMat.opacity += ((frog.phase === 3 ? 0.22 : frog.phase === 2 ? 0.5 : 0.4) - worldRefs.motesMat.opacity) * k;
+  }
   // 三阶段飘浮余烬粒子
   if (frog.phase === 3 && game.state !== 'menu') {
     emberT -= dt;
@@ -557,6 +782,39 @@ function updateAtmo(dt) {
       Particles.spawn(Math.sin(a) * r, 0.4, Math.cos(a) * r, 2, { color: 0xff9040, color2: 0xffc060, speed: 0.5, up: 1.2, life: 2.2, grav: -0.5, drag: 0.8, jitter: 0.5 });
     }
   }
+}
+
+/* ---------- 场景动态元素调度（旗 / 鸟 / 风车 / 气球 / 花粉 / 奶塘） ---------- */
+function updateWorldAnims(dt) {
+  worldT += dt;
+  if (worldAnims.blades) worldAnims.blades.rotation.z += dt * 0.9;
+  // 彩旗与横幅随微风摆动
+  for (let i = 0; i < worldAnims.flags.length; i++) {
+    const f = worldAnims.flags[i];
+    f.rotation.y = f.userData.baseYaw + Math.sin(worldT * 2.8 + f.userData.off) * f.userData.amp;
+    f.rotation.z = Math.sin(worldT * 3.4 + f.userData.off * 0.7) * (f.userData.amp * 0.2);
+  }
+  // 飞鸟盘旋 + 扇翅
+  for (let i = 0; i < worldAnims.birds.length; i++) {
+    const b = worldAnims.birds[i], u = b.userData;
+    const a = u.a0 + worldT * u.spd;
+    b.position.set(Math.sin(a) * u.r, u.h + Math.sin(worldT * 0.7 + u.phase) * 0.8, Math.cos(a) * u.r);
+    b.rotation.y = Math.atan2(Math.cos(a), -Math.sin(a));
+    const flap = Math.sin(worldT * 9 + u.phase) * 0.75;
+    u.wl.rotation.z = flap; u.wr.rotation.z = -flap;
+  }
+  // 热气球大半径缓漂 + 起伏
+  if (worldAnims.balloon) {
+    const a = worldT * 0.013 + 2.1;
+    worldAnims.balloon.position.set(Math.sin(a) * 52, 26 + Math.sin(worldT * 0.35) * 1.6, Math.cos(a) * 52);
+  }
+  // 花粉缓慢环流
+  if (worldAnims.motes) {
+    worldAnims.motes.rotation.y += dt * 0.025;
+    worldAnims.motes.position.y = Math.sin(worldT * 0.5) * 0.5;
+  }
+  // 奶塘微光脉动
+  if (worldAnims.pondMat) worldAnims.pondMat.opacity = 0.86 + Math.sin(worldT * 1.4) * 0.08;
 }
 /* ================= 粒子（加色发光点，反弹落地） ================= */
 const Particles = (() => {
@@ -2125,6 +2383,7 @@ function tick(now) {
   }
   updateCamera(dt);
   updateAtmo(dt);
+  updateWorldAnims(dt);
   Shockwaves.update(dt);
   updateWhiteFlash(dt);
   Particles.update(dt);
@@ -2167,7 +2426,7 @@ Models.init();
     picker.value = '';
   });
 })();
-window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame };
+window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame, updateWorldAnims: updateWorldAnims, updateAtmo: updateAtmo, worldAnims: worldAnims, worldRefs: worldRefs };
 // 分享链接一键复制
 (function wireShare() {
   const url = 'https://ayrtonlin.github.io/peak-duel/';
