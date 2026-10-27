@@ -228,7 +228,7 @@ const CONFIG = {
     hitRadius: [3.1, 3.45, 3.8], hitHeight: [1.05, 1.15, 1.3]
   },
   skills: {
-    ray:    { range: 6.5, warn: 0.8, duration: 3, cooldown: 1.5, dps: 2, tick: 0.5, trackDeg: 65, missDeg: 24, length: 22 },
+    ray:    { range: 9.5, warn: 0.8, duration: 3, cooldown: 1.5, dps: 2, tick: 0.5, trackDeg: 65, missDeg: 24, length: 22 }, // range 覆盖 keepBand(6~9)：距离一近就必放
     cheese: { range: 14, warn: 1.0, duration: 5, cooldown: 3, damage: 4, radius: 2.2, interval: 0.85, fallTime: 0.65, fallHeight: 16 },
     wave:   { range: 10, warn: 0.5, cooldown: 4.5, damage: 10, knockback: 10, speed: 11, maxRadius: 16, thickness: 1.2 }
   },
@@ -2532,7 +2532,7 @@ Models.init();
     picker.value = '';
   });
 })();
-window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame, updateWorldAnims: updateWorldAnims, updateAtmo: updateAtmo, worldAnims: worldAnims, worldRefs: worldRefs, warmupFirstShot: warmupFirstShot, updatePlayer: updatePlayer, updateCamera: updateCamera };
+window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame, updateWorldAnims: updateWorldAnims, updateAtmo: updateAtmo, worldAnims: worldAnims, worldRefs: worldRefs, warmupFirstShot: warmupFirstShot, updatePlayer: updatePlayer, updateCamera: updateCamera, updateFrog: updateFrog };
 // 分享链接一键复制
 (function wireShare() {
   const url = 'https://ayrtonlin.github.io/peak-duel/';
