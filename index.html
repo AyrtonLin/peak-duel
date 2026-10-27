@@ -1412,7 +1412,7 @@ const frog = {
 };
 const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: null, mouthAnchor: null,
   crown: null, aura: null, brows: [], chargeOrb: null, beam: null, beamGlow: null, waveRings: [], mats: [],
-  armL: null, armR: null };
+  armL: null, armR: null, legs: [] };
 
 (function buildFrog() {
   const mBody = std(0xeed98f), mBelly = std(0xfaf0c8), mDark = std(0x3a2c14), mWhite = std(0xffffff), mSpot = std(0xd6b96a);
@@ -1424,11 +1424,11 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const torso = mesh(new THREE.SphereGeometry(0.95, 24, 20), mBody, 0, 0.95, 0);
   torso.scale.set(1.08, 0.92, 1.18);
   body.add(torso);
-  const belly = mesh(new THREE.SphereGeometry(0.72, 18, 14), mBelly, 0, 0.78, 0.42);
-  belly.scale.set(1, 0.82, 0.5);
+  const belly = mesh(new THREE.SphereGeometry(0.72, 18, 14), mBelly, 0, 0.82, 0.74);
+  belly.scale.set(1, 0.88, 0.58);
   body.add(belly);
-  // 背部斑点（提示背部无敌）
-  [[-0.45, 1.1, -0.72], [0.4, 1.25, -0.6], [0, 0.75, -0.95]].forEach(p => {
+  // 背部斑点（提示背部无敌——贴出背壳表面，必须可见）
+  [[-0.45, 1.1, -0.97], [0.4, 1.25, -0.93], [0, 0.75, -1.05]].forEach(p => {
     const s = mesh(new THREE.SphereGeometry(0.16, 8, 6), mSpot, p[0], p[1], p[2]);
     s.scale.set(1, 0.5, 0.6);
     body.add(s);
@@ -1439,17 +1439,20 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.eyeR = mesh(eyeGeo, mWhite, 0.38, 1.72, 0.32);
   body.add(F.eyeL, F.eyeR);
   const pupilGeo = new THREE.SphereGeometry(0.13, 10, 8);
-  [[-0.38, 1.76, 0.58], [0.38, 1.76, 0.58]].forEach(p => {
-    const pu = mesh(pupilGeo, mDark, p[0], p[1], p[2]);
-    F.pupils.push(pu);
-    body.add(pu);
-  });
-  // 嘴（宽弧线，正面）
-  F.mouth = mesh(new THREE.TorusGeometry(0.34, 0.07, 8, 16, Math.PI * 0.9), mDark, 0, 0.78, 0.86);
-  F.mouth.rotation.z = Math.PI + 0.15;
+  const puL = mesh(pupilGeo, mDark, 0, 0.02, 0.26);
+  const puR = mesh(pupilGeo, mDark, 0, 0.02, 0.26);
+  F.eyeL.add(puL); F.eyeR.add(puR); // 挂眼睛下：眨眼时瞳孔随眼皮一起压扁
+  F.pupils.push(puL, puR);
+  // 嘴（正面开口：暗色口腔 + 唇环——射线从嘴里喷出；旧弧线嘴深埋躯干内不可见）
+  F.mouth = new THREE.Group();
+  F.mouth.position.set(0, 0.92, 1.04);
+  const mouthIn = mesh(new THREE.SphereGeometry(0.3, 16, 12), mDark, 0, 0, 0.05);
+  mouthIn.scale.set(1.25, 0.9, 0.42);
+  F.mouth.add(mouthIn);
+  F.mouth.add(mesh(new THREE.TorusGeometry(0.31, 0.075, 10, 24), mDark, 0, 0, 0.1));
   body.add(F.mouth);
   F.mouthAnchor = new THREE.Object3D();
-  F.mouthAnchor.position.set(0, 0.85, 1.0);
+  F.mouthAnchor.position.set(0, 0.92, 1.18); // 嘴外前方：光束起点不被躯干裁剪
   body.add(F.mouthAnchor);
   // 小手臂
   const armGeo = new THREE.CapsuleGeometry(0.11, 0.3, 4, 8);
@@ -1457,12 +1460,14 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   armL.rotation.z = 0.9; armR.rotation.z = -0.9;
   body.add(armL, armR);
   F.armL = armL; F.armR = armR;
-  // 蹲腿
+  // 蹲腿（存引用供走路划摆动画）
   const legGeo = new THREE.SphereGeometry(0.3, 12, 10);
+  F.legs = [];
   [[-0.75, 0.28, -0.15], [0.75, 0.28, -0.15]].forEach(p => {
     const l = mesh(legGeo, mBody, p[0], p[1], p[2]);
     l.scale.set(0.8, 0.6, 1.3);
     body.add(l);
+    F.legs.push(l);
   });
   // 二阶段：奶酪皇冠
   F.crown = new THREE.Group();
@@ -1488,7 +1493,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   body.add(F.aura);
   // 射线蓄力光球
   F.chargeOrb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
-  F.chargeOrb.position.set(0, 0.85, 1.1);
+  F.chargeOrb.position.set(0, 0.92, 1.16); // 蓄力光球悬在张开的嘴前
   F.chargeOrb.visible = false;
   body.add(F.chargeOrb);
   // 射线光束：亮核 + 主束 + 外辉 + 两级滞后拖尾（弯曲轨迹）
@@ -1698,24 +1703,66 @@ function animateFrog(dt, moving, mode) {
     F.body.scale.set(1.12, 0.88 + b * 0.12, 1.12);
     F.body.position.y = b * 0.28;
     F.body.rotation.z = Math.sin(t * 9) * 0.06;
-    F.armL.rotation.set(0, 0, 2.0); F.armR.rotation.set(0, 0, -2.0);
-    F.mouth.scale.set(1.2, 1.5, 1);
+    F.body.rotation.x = 0;
+    F.armL.rotation.set(Math.sin(t * 9) * 0.6, 0, 2.0 + Math.sin(t * 9) * 0.35);
+    F.armR.rotation.set(Math.sin(t * 9) * 0.6, 0, -2.0 - Math.sin(t * 9) * 0.35);
+    F.mouth.scale.set(1.35, 1.55, 1.05); // 大笑张嘴
+    F.legs[0].rotation.x = F.legs[1].rotation.x = 0;
+    return;
+  }
+  if (mode === 'castRay') {
+    // 吐射线：后仰蓄力 + 嘴大张（射线从嘴里喷出）
+    F.armL.rotation.set(-0.5, 0, 1.8); F.armR.rotation.set(-0.5, 0, -1.8);
+    F.body.scale.set(1.05, 1 + Math.sin(t * 6) * 0.03, 1.05);
+    F.body.position.y = 0.05;
+    F.body.rotation.z = 0;
+    F.body.rotation.x = -0.07; // 微微后仰
+    F.mouth.scale.set(1.18, 1.3, 1.1);
+    F.legs[0].rotation.x = F.legs[1].rotation.x = 0;
+    return;
+  }
+  if (mode === 'repel') {
+    // 恼羞成怒前倾蓄力：双臂前推 + 大张嘴
+    F.armL.rotation.set(-1.15, 0, 0.35); F.armR.rotation.set(-1.15, 0, -0.35);
+    F.body.scale.set(1.1, 0.95, 1.15);
+    F.body.position.y = 0.03 + Math.sin(t * 16) * 0.03;
+    F.body.rotation.z = 0;
+    F.body.rotation.x = 0.1; // 前倾压向玩家
+    F.mouth.scale.set(1.25, 1.35, 1.1);
+    F.legs[0].rotation.x = F.legs[1].rotation.x = 0;
     return;
   }
   if (mode === 'castCheese') {
-    F.armL.rotation.set(0, 0, 2.6); F.armR.rotation.set(0, 0, -2.6);
+    F.armL.rotation.set(Math.sin(t * 5) * 0.3, 0, 2.6);
+    F.armR.rotation.set(Math.sin(t * 5) * 0.3, 0, -2.6);
     F.body.scale.set(1 + Math.sin(t * 5) * 0.04, 1 + Math.sin(t * 5) * 0.05, 1);
     F.body.position.y = Math.abs(Math.sin(t * 5)) * 0.18;
-    F.mouth.scale.set(1, 1.2, 1);
+    F.body.rotation.z = 0;
+    F.body.rotation.x = 0;
+    F.mouth.scale.set(1.1, 1.3, 1); // 呕吐投掷张嘴
+    F.legs[0].rotation.x = F.legs[1].rotation.x = 0;
     return;
   }
-  F.armL.rotation.set(0, 0, 0.9); F.armR.rotation.set(0, 0, -0.9);
-  F.mouth.scale.set(1, 1, 1);
+  // —— 常规：呼吸起伏 + 走路摇摆划腿 + 手臂轻摆 + 瞳孔追踪玩家 ——
+  F.armL.rotation.set(Math.sin(t * 2.2) * 0.12, 0, 0.9 + Math.sin(t * 2.2) * 0.08);
+  F.armR.rotation.set(Math.sin(t * 2.2) * 0.12, 0, -0.9 - Math.sin(t * 2.2) * 0.08);
+  F.mouth.scale.set(0.8, 0.5, 0.9); // 闭嘴微笑
   const br = Math.sin(t * (moving ? 7 : 2.4)) * (moving ? 0.06 : 0.03);
   F.body.scale.set(1 - br * 0.6, 1 + br, 1 - br * 0.6);
   F.body.position.y = moving ? Math.abs(Math.sin(frog.walkPhase)) * 0.12 : 0;
   F.body.rotation.z = moving ? Math.sin(frog.walkPhase) * 0.08 : 0;
   F.body.rotation.x = frog.flinch > 0 ? -0.22 * (frog.flinch / 0.25) : 0;
+  // 腿：移动时交替划摆，站立时轻晃
+  const ls = moving ? Math.sin(frog.walkPhase) * 0.5 : Math.sin(t * 2.4) * 0.06;
+  F.legs[0].rotation.x = ls;
+  F.legs[1].rotation.x = -ls;
+  // 瞳孔看向玩家（侧向偏移 + 略微俯视）
+  _v1.copy(player.pos).sub(frog.pos); _v1.y = 0;
+  const dLen = _v1.length() || 1;
+  const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / dLen;
+  const px = clamp(side, -1, 1) * 0.09;
+  F.pupils[0].position.set(px, 0.01, 0.26);
+  F.pupils[1].position.set(px, 0.01, 0.26);
   F.mats.forEach(m => m.emissive.setHex(frog.flinch > 0 ? 0x5a4010 : 0x000000));
 }
 function updateFrog(dt) {
@@ -1890,7 +1937,7 @@ function updateRayCast(c, dt) {
     const pr = 1 - c.t / sk.ray.warn;
     F.chargeOrb.scale.setScalar(0.3 + pr * 1.6);
     F.chargeOrb.material.opacity = 0.5 + pr * 0.5;
-    animateFrog(dt, false, 'normal');
+    animateFrog(dt, false, 'castRay');
     c.t -= dt;
     if (c.t <= 0) {
       c.phase = 'active';
@@ -1924,6 +1971,7 @@ function updateRayCast(c, dt) {
   }
   const len = c.locked ? sk.ray.length : Math.min(pdist + 1.5, sk.ray.length);
   updateBeam(_v2, c.beamDir, len);
+  animateFrog(dt, false, 'castRay'); // 吐射线期间保持张嘴后仰姿势
   // 命中判定：夹角小于阈值则每 tick 造成伤害
   const miss = Math.acos(clamp(c.beamDir.dot(_v3), -1, 1));
   c.tick -= dt;
@@ -2027,7 +2075,7 @@ function updateRepelCast(c, dt) {
     F.waveRings[1].scale.setScalar(1 + pr * (sk.repel.range - 1)); // 危险圈扩张到弹飞半径
     F.waveRings[1].material.opacity = 0.3 + pr * 0.5;
     F.mats.forEach(m => m.emissive.setHex(0x7a4a1f)); // 蓄力发光
-    animateFrog(dt, false, 'laugh');
+    animateFrog(dt, false, 'repel');
     if (c.t <= 0) {
       // 弹飞判定：瞬间仍在范围内且未跳跃闪避
       const dd = Math.hypot(player.pos.x - frog.pos.x, player.pos.z - frog.pos.z);
