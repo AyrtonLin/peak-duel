@@ -1443,16 +1443,12 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const puR = mesh(pupilGeo, mDark, 0, 0.02, 0.26);
   F.eyeL.add(puL); F.eyeR.add(puR); // 挂眼睛下：眨眼时瞳孔随眼皮一起压扁
   F.pupils.push(puL, puR);
-  // 嘴（正面开口：暗色口腔 + 唇环——射线从嘴里喷出；旧弧线嘴深埋躯干内不可见）
-  F.mouth = new THREE.Group();
-  F.mouth.position.set(0, 0.92, 1.04);
-  const mouthIn = mesh(new THREE.SphereGeometry(0.3, 16, 12), mDark, 0, 0, 0.05);
-  mouthIn.scale.set(1.25, 0.9, 0.42);
-  F.mouth.add(mouthIn);
-  F.mouth.add(mesh(new THREE.TorusGeometry(0.31, 0.075, 10, 24), mDark, 0, 0, 0.1));
+  // 嘴（原风格细弧线微笑——抬出体表可见；射线从嘴前锚点喷出）
+  F.mouth = mesh(new THREE.TorusGeometry(0.34, 0.07, 8, 16, Math.PI * 0.9), mDark, 0, 0.85, 1.08);
+  F.mouth.rotation.z = Math.PI + 0.15;
   body.add(F.mouth);
   F.mouthAnchor = new THREE.Object3D();
-  F.mouthAnchor.position.set(0, 0.92, 1.18); // 嘴外前方：光束起点不被躯干裁剪
+  F.mouthAnchor.position.set(0, 0.85, 1.16); // 嘴外前方：光束起点不被躯干裁剪
   body.add(F.mouthAnchor);
   // 小手臂
   const armGeo = new THREE.CapsuleGeometry(0.11, 0.3, 4, 8);
@@ -1493,7 +1489,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   body.add(F.aura);
   // 射线蓄力光球
   F.chargeOrb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
-  F.chargeOrb.position.set(0, 0.92, 1.16); // 蓄力光球悬在张开的嘴前
+  F.chargeOrb.position.set(0, 0.85, 1.14); // 蓄力光球悬在嘴前
   F.chargeOrb.visible = false;
   body.add(F.chargeOrb);
   // 射线光束：亮核 + 主束 + 外辉 + 两级滞后拖尾（弯曲轨迹）
@@ -1746,7 +1742,7 @@ function animateFrog(dt, moving, mode) {
   // —— 常规：呼吸起伏 + 走路摇摆划腿 + 手臂轻摆 + 瞳孔追踪玩家 ——
   F.armL.rotation.set(Math.sin(t * 2.2) * 0.12, 0, 0.9 + Math.sin(t * 2.2) * 0.08);
   F.armR.rotation.set(Math.sin(t * 2.2) * 0.12, 0, -0.9 - Math.sin(t * 2.2) * 0.08);
-  F.mouth.scale.set(0.8, 0.5, 0.9); // 闭嘴微笑
+  F.mouth.scale.set(1, 1, 1); // 闭嘴微笑（原风格）
   const br = Math.sin(t * (moving ? 7 : 2.4)) * (moving ? 0.06 : 0.03);
   F.body.scale.set(1 - br * 0.6, 1 + br, 1 - br * 0.6);
   F.body.position.y = moving ? Math.abs(Math.sin(frog.walkPhase)) * 0.12 : 0;
