@@ -72,6 +72,16 @@ body.playing #hud { display: block; }
 .bigBtn:hover { transform: translateY(-2px) scale(1.03); }
 .bigBtn:active { transform: translateY(3px); box-shadow: 0 2px 0 #b46a00; }
 .bigBtn:disabled { filter: grayscale(1); cursor: not-allowed; }
+#menuBtn { margin-top: 14px; font-size: 19px; padding: 10px 38px; letter-spacing: 5px; color: #1c2a36; background: linear-gradient(180deg,#e8f1f8,#c6d8e4 40%,#9db4c6); box-shadow: 0 4px 0 #55707f, 0 8px 18px rgba(0,0,0,.4); }
+#menuBtn:active { transform: translateY(2px); box-shadow: 0 2px 0 #55707f; }
+/* ---------- 难度选择 ---------- */
+.diffRow { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin: 4px 0 10px; }
+.diffBtn { pointer-events: auto; cursor: pointer; font-size: 17px; font-weight: 800; letter-spacing: 3px; color: #cfe0f0; padding: 10px 26px; border: 2px solid rgba(255,255,255,.22); border-radius: 30px; background: rgba(10,16,22,.6); transition: border-color .12s, color .12s, transform .12s; }
+.diffBtn:hover { border-color: rgba(255,255,255,.5); transform: translateY(-1px); }
+.diffBtn.sel { background: rgba(255,255,255,.07); box-shadow: 0 0 16px rgba(255,214,90,.12); }
+#diffDesc { color: #9fb6c9; font-size: 14px; letter-spacing: 1px; margin-bottom: 18px; }
+#diffBadge { position: fixed; left: 18px; bottom: 18px; z-index: 10; background: rgba(10,16,22,.6); border: 2px solid rgba(255,255,255,.25); border-radius: 20px; padding: 6px 16px; color: #cfe0f0; font-size: 15px; font-weight: 800; letter-spacing: 3px; pointer-events: none; text-shadow: 0 1px 3px #000; }
+body.touch #diffBadge { bottom: 166px; left: 16px; }
 .hint { color: #9fb4c8; font-size: 12px; margin-top: 16px; }
 #resultTitle { font-size: 62px; font-weight: 900; margin: 0 0 10px; letter-spacing: 10px; text-shadow: 0 4px 18px rgba(0,0,0,.7); }
 #resultTitle.win { color: var(--gold); }
@@ -123,6 +133,9 @@ body.touch.portrait #rotateHint { display: block; }
   #centerMsg { font-size: 24px; }
   #resultTitle { font-size: 40px; }
   .controls, #touchHint { font-size: 13px; }
+  .diffBtn { font-size: 15px; padding: 8px 16px; letter-spacing: 2px; }
+  #diffDesc { font-size: 12px; margin-bottom: 12px; }
+  #menuBtn { font-size: 16px; padding: 9px 28px; letter-spacing: 3px; }
   #joyBase { width: 110px; height: 110px; }
   #joyStick { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
 }
@@ -142,6 +155,7 @@ body.touch.portrait #rotateHint { display: block; }
     <div class="chip" id="chipWave"><div class="cf" id="cfWave"></div><span class="cl">声波</span><span class="cs" id="csWave">--</span></div>
   </div>
   <div id="jumpUI"><div id="jumpFill"></div><span id="jumpTxt">袋鼠跳</span></div>
+  <div id="diffBadge"></div>
 </div>
 <div id="vignette"></div>
 <div id="popups"></div>
@@ -165,6 +179,13 @@ body.touch.portrait #rotateHint { display: block; }
     目标：只打奶蛙的<b>正面</b>！背部无敌会弹开子弹 · 奶蛙转身不快，<b>贴身绕行</b>可抢到它正面<br>
     技巧：技能预警亮起时起跳闪避——<b>跳跃闪避成功后，奶蛙技能会失去锁定</b>，不再追着你打
   </div>
+  <div class="diffRow" id="diffRow">
+    <button class="diffBtn" data-d="0" type="button">简单</button>
+    <button class="diffBtn" data-d="1" type="button">普通</button>
+    <button class="diffBtn" data-d="2" type="button">困难</button>
+    <button class="diffBtn" data-d="3" type="button">地狱</button>
+  </div>
+  <div id="diffDesc"></div>
   <button class="bigBtn" id="startBtn">开始对决</button>
   <div class="modelRow">
     <button class="miniBtn" id="pickModelBtn" type="button">载入 GLB 模型（可选）</button>
@@ -181,6 +202,7 @@ body.touch.portrait #rotateHint { display: block; }
   <h2 id="resultTitle"></h2>
   <div id="resultStats"></div>
   <button class="bigBtn" id="restartBtn">再来一局</button>
+  <button class="bigBtn" id="menuBtn" type="button">返回菜单</button>
 </div>
 <div id="pauseScreen" class="screen" style="display:none">
   <h2>已暂停</h2>
@@ -2362,7 +2384,7 @@ function showEndScreen() {
   const s = player.stats;
   const acc = s.shots > 0 ? Math.round(s.hits / s.shots * 100) : 0;
   dom.resultStats.innerHTML =
-    '用时 <b>' + game.time.toFixed(1) + '</b> 秒 &nbsp;·&nbsp; 射出 <b>' + s.shots + '</b> 发 &nbsp;·&nbsp; 命中正面 <b>' + s.hits + '</b> 发<br>' +
+    '难度 <b>' + DIFFS[diffIdx].name + '</b> &nbsp;·&nbsp; 用时 <b>' + game.time.toFixed(1) + '</b> 秒 &nbsp;·&nbsp; 射出 <b>' + s.shots + '</b> 发 &nbsp;·&nbsp; 命中正面 <b>' + s.hits + '</b> 发<br>' +
     '命中率 <b>' + acc + '%</b> &nbsp;·&nbsp; 被背部弹开 <b>' + s.ricochets + '</b> 发 &nbsp;·&nbsp; 受到伤害 <b>' + s.dmgTaken + '</b>';
   dom.endScreen.style.display = 'flex';
   if (document.exitPointerLock) document.exitPointerLock();
@@ -2637,8 +2659,47 @@ function startGame() {
   requestPointerLock();
   centerMsg('只打奶蛙正面！背部会弹开子弹');
 }
+/* ================= 难度模式（简单 = 当前版本数值） ================= */
+const DIFFS = [
+  { name: '简单', mult: 1.0, stun: 2.0, color: '#7ec96a', desc: '当前版本数值 · 技能伤害 ×1.0 · 弹飞眩晕 2.0 秒' },
+  { name: '普通', mult: 1.5, stun: 2.6, color: '#5ba8e8', desc: '技能伤害 ×1.5 · 弹飞眩晕 2.6 秒' },
+  { name: '困难', mult: 2.0, stun: 3.2, color: '#f0a23c', desc: '技能伤害 ×2.0 · 弹飞眩晕 3.2 秒' },
+  { name: '地狱', mult: 2.5, stun: 3.8, color: '#e85b5b', desc: '技能伤害 ×2.5 · 弹飞眩晕 3.8 秒 · 慎入！' }
+];
+let diffIdx = 0;
+try { diffIdx = clamp(Math.round(+localStorage.getItem('pd_diff')) || 0, 0, DIFFS.length - 1); } catch (e) {}
+function applyDifficulty(i) {
+  diffIdx = i;
+  const d = DIFFS[i], s = CONFIG.skills, m = d.mult;
+  s.ray.dps = +(2 * m).toFixed(1);      // 2 / 3 / 4 / 5
+  s.cheese.damage = Math.round(4 * m);  // 4 / 6 / 8 / 10
+  s.wave.damage = Math.round(10 * m);   // 10 / 15 / 20 / 25
+  s.repel.damage = Math.round(5 * m);   // 5 / 8 / 10 / 13
+  s.repel.stun = d.stun;                // 2 / 2.6 / 3.2 / 3.8
+  try { localStorage.setItem('pd_diff', String(i)); } catch (e) {}
+  document.querySelectorAll('.diffBtn').forEach(b => {
+    const on = +b.dataset.d === i;
+    b.classList.toggle('sel', on);
+    b.style.borderColor = on ? d.color : '';
+    b.style.color = on ? d.color : '';
+  });
+  dom.diffDesc.textContent = d.desc;
+  dom.diffBadge.textContent = d.name + '模式';
+  dom.diffBadge.style.color = d.color;
+  dom.diffBadge.style.borderColor = d.color + '77';
+}
+document.querySelectorAll('.diffBtn').forEach(b => b.addEventListener('click', () => applyDifficulty(+b.dataset.d)));
+applyDifficulty(diffIdx); // 默认简单，记忆上次选择
+
 dom.startBtn.addEventListener('click', startGame);
 dom.restartBtn.addEventListener('click', startGame);
+dom.menuBtn.addEventListener('click', () => {
+  game.state = 'menu';
+  resetGame();
+  document.body.classList.remove('playing');
+  dom.endScreen.style.display = 'none';
+  dom.startScreen.style.display = '';
+});
 dom.fsBtn.addEventListener('click', () => {
   const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
   tryFullscreen(!fsEl);
@@ -2746,7 +2807,7 @@ Models.init();
     picker.value = '';
   });
 })();
-window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame, updateWorldAnims: updateWorldAnims, updateAtmo: updateAtmo, worldAnims: worldAnims, worldRefs: worldRefs, warmupFirstShot: warmupFirstShot, updatePlayer: updatePlayer, updateCamera: updateCamera, updateFrog: updateFrog };
+window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame, updateWorldAnims: updateWorldAnims, updateAtmo: updateAtmo, worldAnims: worldAnims, worldRefs: worldRefs, warmupFirstShot: warmupFirstShot, updatePlayer: updatePlayer, updateCamera: updateCamera, updateFrog: updateFrog, updateEnding: updateEnding };
 // 分享链接一键复制
 (function wireShare() {
   const url = 'https://ayrtonlin.github.io/peak-duel/';
