@@ -156,7 +156,7 @@ body.touch.portrait #rotateHint { display: block; }
     <div class="card"><img class="cardImg" data-key="P3" alt=""><div>奶蛙·三阶</div></div>
   </div>
   <div class="controls">
-    <b>WASD</b> 移动 &nbsp;·&nbsp; <b>鼠标</b> 转视角 &nbsp;·&nbsp; <b>左键(按住)</b> 开火 &nbsp;·&nbsp; <b>右键/Q键(按住)</b> 视角锁定奶蛙（若浏览器右键手势冲突请用 Q 键） &nbsp;·&nbsp; <b>空格</b> 袋鼠跳（起跳后 0.4 秒无敌免控！）<br>
+    <b>WASD</b> 移动 &nbsp;·&nbsp; <b>鼠标</b> 转视角 &nbsp;·&nbsp; <b>左键(按住)</b> 开火 &nbsp;·&nbsp; <b>中键/Q键(按住)</b> 视角锁定奶蛙 &nbsp;·&nbsp; <b>空格</b> 袋鼠跳（起跳后 0.4 秒无敌免控！）<br>
     目标：只打奶蛙的<b>正面</b>！背部无敌会弹开子弹 &nbsp;·&nbsp; 奶蛙转身不快，<b>贴身绕行</b>可抢到它正面<br>
     技巧：技能预警亮起时起跳闪避——<b>跳跃闪避成功后，奶蛙技能会失去锁定</b>，不再追着你打
   </div>
@@ -1042,7 +1042,7 @@ const pc = CONFIG.player;
 const GRAVITY = 35;
 const JUMP_VEL = Math.sqrt(2 * GRAVITY * pc.jumpHeight);
 
-const input = { keys: {}, fire: false, rmb: false, lockKey: false, lookX: 0, lookY: 0, joyX: 0, joyY: 0, touchFire: false, jumpQueued: false };
+const input = { keys: {}, fire: false, mmb: false, lockKey: false, lookX: 0, lookY: 0, joyX: 0, joyY: 0, touchFire: false, jumpQueued: false };
 
 function playerInvincible() { return player.jumpInv > 0 || player.invTimer > 0; }
 
@@ -1088,8 +1088,8 @@ function updatePlayer(dt) {
     animatePlayer(dt, false, 0);
     return;
   }
-  // —— 视角锁定（按住右键或 Q 键）：视角平滑追踪奶蛙（松开即恢复手动视角）——
-  if ((input.rmb || input.lockKey) && !frog.dead) {
+  // —— 视角锁定（按住中键或 Q 键）：视角平滑追踪奶蛙（松开即恢复手动视角）——
+  if ((input.mmb || input.lockKey) && !frog.dead) {
     const dx = frog.pos.x - player.pos.x, dz = frog.pos.z - player.pos.z;
     const dy = frog.center.y - (player.pos.y + 1.5); // 1.5 ≈ 视线高度
     const tYaw = Math.atan2(dx, dz);
@@ -2153,7 +2153,7 @@ function updateHUD(dt) {
   dom.vignette.style.opacity = vOp;
   crossPulse = Math.max(0, crossPulse - dt * 5);
   dom.crosshair.style.setProperty('--sp', (8 + crossPulse * 14) + 'px');
-  dom.crosshair.classList.toggle('locked', (input.rmb || input.lockKey) && game.state === 'playing' && !frog.dead); // 锁定指示
+  dom.crosshair.classList.toggle('locked', (input.mmb || input.lockKey) && game.state === 'playing' && !frog.dead); // 锁定指示
 }
 
 /* ================= 摄像机 ================= */
@@ -2198,7 +2198,7 @@ let pointerLocked = false, lockFailed = false;
 window.addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   input.keys[e.code] = true;
-  if (e.code === 'KeyQ') input.lockKey = true; // Q 键也能锁定（右键被浏览器手势抢占时的替代）
+  if (e.code === 'KeyQ') input.lockKey = true; // Q 键也能锁定（触控板无中键时的替代）
   if (e.code === 'Space' && !e.repeat) input.jumpQueued = true;
 });
 window.addEventListener('keyup', e => {
@@ -2206,15 +2206,15 @@ window.addEventListener('keyup', e => {
   if (e.code === 'KeyQ') input.lockKey = false;
 });
 window.addEventListener('mousemove', e => {
-  if (game.state !== 'playing' || input.rmb || input.lockKey) return; // 锁定期间视角交由锁定逻辑驱动
+  if (game.state !== 'playing' || input.mmb || input.lockKey) return; // 锁定期间视角交由锁定逻辑驱动
   if (pointerLocked || lockFailed) {
     player.yaw -= (e.movementX || 0) * pc.mouseSens;
     player.pitch = clamp(player.pitch - (e.movementY || 0) * pc.mouseSens, pc.pitchMin, pc.pitchMax);
   }
 });
 window.addEventListener('mousedown', e => {
-  if (e.button === 2) { // 右键：视角锁定奶蛙（preventDefault 尽量拦截右键菜单/手势）
-    input.rmb = true;
+  if (e.button === 1) { // 中键：视角锁定奶蛙（preventDefault 拦截浏览器中键自动滚动）
+    input.mmb = true;
     if (e.preventDefault) e.preventDefault();
     return;
   }
@@ -2222,10 +2222,11 @@ window.addEventListener('mousedown', e => {
   if (game.state === 'playing') input.fire = true;
 });
 window.addEventListener('mouseup', e => {
-  if (e.button === 2) { input.rmb = false; return; }
+  if (e.button === 1) { input.mmb = false; return; }
   if (e.button === 0) input.fire = false;
 });
-window.addEventListener('blur', () => { input.rmb = false; input.lockKey = false; input.fire = false; }); // 失焦安全复位
+window.addEventListener('auxclick', e => { if (e.button === 1 && e.preventDefault) e.preventDefault(); }); // 中键辅助点击兜底拦截
+window.addEventListener('blur', () => { input.mmb = false; input.lockKey = false; input.fire = false; }); // 失焦安全复位
 window.addEventListener('contextmenu', e => { e.preventDefault(); });
 function requestPointerLock() {
   if (lockFailed || document.body.classList.contains('touch')) return;
