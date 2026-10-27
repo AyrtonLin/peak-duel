@@ -2661,10 +2661,10 @@ function startGame() {
 }
 /* ================= 难度模式（简单 = 当前版本数值） ================= */
 const DIFFS = [
-  { name: '简单', mult: 1.0, stun: 2.0, color: '#7ec96a', desc: '当前版本数值 · 技能伤害 ×1.0 · 弹飞眩晕 2.0 秒' },
-  { name: '普通', mult: 1.5, stun: 2.6, color: '#5ba8e8', desc: '技能伤害 ×1.5 · 弹飞眩晕 2.6 秒' },
-  { name: '困难', mult: 2.0, stun: 3.2, color: '#f0a23c', desc: '技能伤害 ×2.0 · 弹飞眩晕 3.2 秒' },
-  { name: '地狱', mult: 2.5, stun: 3.8, color: '#e85b5b', desc: '技能伤害 ×2.5 · 弹飞眩晕 3.8 秒 · 慎入！' }
+  { name: '简单', mult: 1.0, stun: 2.0, hpM: 1.0, color: '#7ec96a', desc: '当前版本数值 · 技能伤害 ×1.0 · 弹飞眩晕 2.0 秒 · 血量 200' },
+  { name: '普通', mult: 1.5, stun: 2.6, hpM: 1.25, color: '#5ba8e8', desc: '技能伤害 ×1.5 · 弹飞眩晕 2.6 秒 · 血量 250' },
+  { name: '困难', mult: 2.0, stun: 3.2, hpM: 1.5, color: '#f0a23c', desc: '技能伤害 ×2.0 · 弹飞眩晕 3.2 秒 · 血量 300' },
+  { name: '地狱', mult: 2.5, stun: 3.8, hpM: 1.75, color: '#e85b5b', desc: '技能伤害 ×2.5 · 弹飞眩晕 3.8 秒 · 血量 350 · 慎入！' }
 ];
 let diffIdx = 0;
 try { diffIdx = clamp(Math.round(+localStorage.getItem('pd_diff')) || 0, 0, DIFFS.length - 1); } catch (e) {}
@@ -2676,6 +2676,10 @@ function applyDifficulty(i) {
   s.wave.damage = Math.round(10 * m);   // 10 / 15 / 20 / 25
   s.repel.damage = Math.round(5 * m);   // 5 / 8 / 10 / 13
   s.repel.stun = d.stun;                // 2 / 2.6 / 3.2 / 3.8
+  // 奶蛙血量逐级递增，进化阈值（二阶段 / 三阶段标定血量）等比变化
+  CONFIG.enemy.maxHp = Math.round(200 * d.hpM);       // 200 / 250 / 300 / 350
+  CONFIG.enemy.phase2Hp = Math.round(140 * d.hpM);    // 140 / 175 / 210 / 245
+  CONFIG.enemy.phase3Hp = Math.round(80 * d.hpM);     // 80 / 100 / 120 / 140
   try { localStorage.setItem('pd_diff', String(i)); } catch (e) {}
   document.querySelectorAll('.diffBtn').forEach(b => {
     const on = +b.dataset.d === i;
