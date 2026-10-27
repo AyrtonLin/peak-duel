@@ -13,6 +13,7 @@ body { font-family: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif; us
 /* ---------- 准星 ---------- */
 #crosshair { position: fixed; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 20; --sp: 8px; }
 #crosshair span { position: absolute; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,.9); }
+#crosshair.locked span { background: #ffd23a; box-shadow: 0 0 6px rgba(255,180,40,.95); }
 #crosshair .tick { width: 2px; height: 11px; left: -1px; }
 #crosshair .tick2 { width: 11px; height: 2px; top: -1px; }
 #crosshair .u { bottom: var(--sp); }
@@ -155,7 +156,7 @@ body.touch.portrait #rotateHint { display: block; }
     <div class="card"><img class="cardImg" data-key="P3" alt=""><div>奶蛙·三阶</div></div>
   </div>
   <div class="controls">
-    <b>WASD</b> 移动 &nbsp;·&nbsp; <b>鼠标</b> 转视角 &nbsp;·&nbsp; <b>左键(按住)</b> 开火 &nbsp;·&nbsp; <b>空格</b> 袋鼠跳（起跳后 0.4 秒无敌免控！）<br>
+    <b>WASD</b> 移动 &nbsp;·&nbsp; <b>鼠标</b> 转视角 &nbsp;·&nbsp; <b>左键(按住)</b> 开火 &nbsp;·&nbsp; <b>右键(按住)</b> 视角锁定奶蛙 &nbsp;·&nbsp; <b>空格</b> 袋鼠跳（起跳后 0.4 秒无敌免控！）<br>
     目标：只打奶蛙的<b>正面</b>！背部无敌会弹开子弹 &nbsp;·&nbsp; 奶蛙转身不快，<b>贴身绕行</b>可抢到它正面<br>
     技巧：技能预警亮起时起跳闪避——<b>跳跃闪避成功后，奶蛙技能会失去锁定</b>，不再追着你打
   </div>
@@ -224,7 +225,7 @@ const CONFIG = {
     keepBand: [6, 9],
     transformStun: 1.2,
     phase2Hp: 140, phase3Hp: 80,
-    hitRadius: [1.62, 1.82, 2.02], hitHeight: [1.05, 1.15, 1.3]
+    hitRadius: [2.05, 2.3, 2.55], hitHeight: [1.05, 1.15, 1.3]
   },
   skills: {
     ray:    { range: 5,  warn: 0.8, duration: 3, cooldown: 3,  dps: 2, tick: 0.5, trackDeg: 65, missDeg: 24, length: 22 },
@@ -1041,7 +1042,7 @@ const pc = CONFIG.player;
 const GRAVITY = 35;
 const JUMP_VEL = Math.sqrt(2 * GRAVITY * pc.jumpHeight);
 
-const input = { keys: {}, fire: false, lookX: 0, lookY: 0, joyX: 0, joyY: 0, touchFire: false, jumpQueued: false };
+const input = { keys: {}, fire: false, rmb: false, lookX: 0, lookY: 0, joyX: 0, joyY: 0, touchFire: false, jumpQueued: false };
 
 function playerInvincible() { return player.jumpInv > 0 || player.invTimer > 0; }
 
@@ -1086,6 +1087,19 @@ function updatePlayer(dt) {
     P.root.position.copy(player.pos);
     animatePlayer(dt, false, 0);
     return;
+  }
+  // —— 右键视角锁定：按住期间视角平滑追踪奶蛙（松开即恢复手动视角）——
+  if (input.rmb && !frog.dead) {
+    const dx = frog.pos.x - player.pos.x, dz = frog.pos.z - player.pos.z;
+    const dy = frog.center.y - (player.pos.y + 1.5); // 1.5 ≈ 视线高度
+    const tYaw = Math.atan2(dx, dz);
+    const tPitch = clamp(Math.atan2(dy, Math.hypot(dx, dz)), pc.pitchMin, pc.pitchMax);
+    let dYaw = tYaw - player.yaw;
+    while (dYaw > Math.PI) dYaw -= TAU;
+    while (dYaw < -Math.PI) dYaw += TAU;
+    const k = 1 - Math.exp(-10 * dt); // 指数平滑，约 0.3 秒完成追踪
+    player.yaw += dYaw * k;
+    player.pitch += (tPitch - player.pitch) * k;
   }
   // 输入方向（相对镜头）
   const fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
@@ -1135,7 +1149,8 @@ function updatePlayer(dt) {
   // 与奶蛙保持最小距离
   _v1.copy(player.pos).sub(frog.pos); _v1.y = 0;
   const fd = _v1.length();
-  if (fd < 2.3 && fd > 0.001) { _v1.multiplyScalar((2.3 - fd) / fd); player.pos.add(_v1); }
+  const sep = 1.4 + frog.baseScale * 0.65; // 与奶蛙的最小间距随体型缩放
+  if (fd < sep && fd > 0.001) { _v1.multiplyScalar((sep - fd) / fd); player.pos.add(_v1); }
   // 开火
   player.fireCd -= dt;
   if (input.fire && player.fireCd <= 0) {
@@ -1403,9 +1418,9 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
 F.procParts = F.body.children.filter(c => c !== F.mouthAnchor && c !== F.chargeOrb);
 
 const FROG_PHASE_LOOK = [
-  { body: 0xeed98f, spot: 0xd6b96a, scale: 1.35 },
-  { body: 0xe5c859, spot: 0xcfa94e, scale: 1.54 },
-  { body: 0xf2ede7, spot: 0xd8c8a8, scale: 1.76 }
+  { body: 0xeed98f, spot: 0xd6b96a, scale: 1.7 },
+  { body: 0xe5c859, spot: 0xcfa94e, scale: 1.94 },
+  { body: 0xf2ede7, spot: 0xd8c8a8, scale: 2.2 }
 ];
 function applyFrogPhase(n) {
   const look = FROG_PHASE_LOOK[n - 1];
@@ -1630,7 +1645,7 @@ function updateFrog(dt) {
   else if (dist < ec.keepBand[0]) { mx = -_v1.x * ec.moveSpeed; mz = -_v1.z * ec.moveSpeed; }
   else { mx = -_v1.z * frog.strafeDir * ec.strafeSpeed; mz = _v1.x * frog.strafeDir * ec.strafeSpeed; }
   frog.pos.x += mx * dt; frog.pos.z += mz * dt;
-  clampArena(frog.pos, 2.4); // 体型放大后多留身体半径，避免蹭穿围栏
+  clampArena(frog.pos, 2.8); // 体型放大后多留身体半径，避免蹭穿围栏
   frog.walkPhase += Math.hypot(mx, mz) * dt * 2.4;
   // 技能触发（不再要求奶蛙背对玩家：任何朝向、任意相对位置均可施放）
   if (frog.phase === 1 && dist <= sk.ray.range && frog.cds.ray <= 0) startCast('ray');
@@ -2138,6 +2153,7 @@ function updateHUD(dt) {
   dom.vignette.style.opacity = vOp;
   crossPulse = Math.max(0, crossPulse - dt * 5);
   dom.crosshair.style.setProperty('--sp', (8 + crossPulse * 14) + 'px');
+  dom.crosshair.classList.toggle('locked', input.rmb && game.state === 'playing' && !frog.dead); // 右键锁定指示
 }
 
 /* ================= 摄像机 ================= */
@@ -2186,17 +2202,22 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { input.keys[e.code] = false; });
 window.addEventListener('mousemove', e => {
-  if (game.state !== 'playing') return;
+  if (game.state !== 'playing' || input.rmb) return; // 右键锁定期间视角交由锁定逻辑驱动
   if (pointerLocked || lockFailed) {
     player.yaw -= (e.movementX || 0) * pc.mouseSens;
     player.pitch = clamp(player.pitch - (e.movementY || 0) * pc.mouseSens, pc.pitchMin, pc.pitchMax);
   }
 });
 window.addEventListener('mousedown', e => {
+  if (e.button === 2) { input.rmb = true; return; } // 右键：视角锁定奶蛙
   if (e.button !== 0) return;
   if (game.state === 'playing') input.fire = true;
 });
-window.addEventListener('mouseup', e => { if (e.button === 0) input.fire = false; });
+window.addEventListener('mouseup', e => {
+  if (e.button === 2) { input.rmb = false; return; }
+  if (e.button === 0) input.fire = false;
+});
+window.addEventListener('blur', () => { input.rmb = false; input.fire = false; }); // 失焦安全复位
 window.addEventListener('contextmenu', e => { e.preventDefault(); });
 function requestPointerLock() {
   if (lockFailed || document.body.classList.contains('touch')) return;
@@ -2458,7 +2479,7 @@ Models.init();
     picker.value = '';
   });
 })();
-window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame, updateWorldAnims: updateWorldAnims, updateAtmo: updateAtmo, worldAnims: worldAnims, worldRefs: worldRefs, warmupFirstShot: warmupFirstShot };
+window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame, updateWorldAnims: updateWorldAnims, updateAtmo: updateAtmo, worldAnims: worldAnims, worldRefs: worldRefs, warmupFirstShot: warmupFirstShot, updatePlayer: updatePlayer, updateCamera: updateCamera };
 // 分享链接一键复制
 (function wireShare() {
   const url = 'https://ayrtonlin.github.io/peak-duel/';
