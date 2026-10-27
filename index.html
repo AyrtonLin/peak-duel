@@ -1007,64 +1007,356 @@ const player = {
   knockTimer: 0, stunT: 0, dead: false, celebrate: false,
   stats: { shots: 0, hits: 0, ricochets: 0, dmgTaken: 0 }
 };
-const P = { root: null, visual: null, legL: null, legR: null, footL: null, footR: null, armL: null, armR: null, gun: null, muzzle: null, head: null, torso: null, flash: null, flashLight: null, stars: null, mats: [] };
+const P = { root: null, visual: null, legL: null, legR: null, footL: null, footR: null, armL: null, armR: null, gun: null, muzzle: null, head: null, torso: null, tail: null, flash: null, flashLight: null, stars: null, mats: [] };
 
+/* ================= 肥嘟嘟模型参数（可调：比例/装备/颜色） ================= */
+const PCFG = {
+  bodyR: 0.72, bodyY: 1.02,      // 躯干半径 / 中心高
+  headR: 0.50, headY: 1.88,      // 头部半径 / 中心高（Q版大头）
+  eyeSize: 1.0,                  // 眼睛整体缩放
+  earLen: 1.0, earTilt: 0.30,    // 耳朵长度倍率 / 外倾角（弧度）
+  helmetSize: 1.0,               // 头盔整体缩放
+  vestThick: 0.075,              // 背心壳与躯干间隙（背心厚度）
+  pouchCount: 3,                 // 胸前弹匣袋数量
+  tailCurve: 1.0                 // 尾巴弯垂程度
+};
+const P_HEAD_Y = PCFG.headY;
+
+/* ================= 肥嘟嘟（程序化建模：黄皮肤袋鼠系 Q 版 + 战术装备） =================
+   模块化分解：createMaterials / createHead / createHelmet / createHeadset /
+   createBody / createVest / createPouches / createLimbs / createTail
+   —— 单文件游戏架构下的等价实现，全部几何体有真实三维体积 */
 (function buildPlayer() {
-  const cBody = 0xf5c542, cShade = 0xdfa32e, cDark = 0x2a1d0e, cBelly = 0xfbf0d0, cAcc = 0xc97a20, cCream = 0xffebc4;
-  const mBody = std(cBody), mShade = std(cShade), mDark = std(cDark, { roughness: 0.55 }), mBelly = std(cBelly), mAcc = std(cAcc), mCream = std(cCream);
-  P.mats = [mBody, mShade, mDark, mBelly, mAcc, mCream];
+  /* ---------- createMaterials：皮肤 + 眼鼻 + 程序化迷彩装备 ---------- */
+  function camoTex(base, palette) {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+    const g = cv.getContext('2d');
+    g.fillStyle = base; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 55; i++) { // 不规则迷彩斑块
+      g.fillStyle = palette[i % palette.length];
+      g.beginPath();
+      g.ellipse(Math.random() * 256, Math.random() * 256, rand(14, 56), rand(10, 40), rand(0, TAU), 0, TAU);
+      g.fill();
+    }
+    for (let i = 0; i < 240; i++) { // 细碎像素噪斑（层次感）
+      g.fillStyle = palette[Math.floor(Math.random() * palette.length)];
+      g.globalAlpha = rand(0.25, 0.65);
+      g.fillRect(Math.random() * 256, Math.random() * 256, rand(2, 9), rand(2, 9));
+    }
+    g.globalAlpha = 1;
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  }
+  const mSkin  = std(0xf5c542, { roughness: 0.62 });
+  const mShade = std(0xdfa32e, { roughness: 0.66 });
+  const mBelly = std(0xfbf0d0, { roughness: 0.72 });
+  const mEarIn = std(0xe8ae70, { roughness: 0.72 });
+  const mNose  = std(0x5f3c20, { roughness: 0.32 });
+  const mIris  = std(0x3a2313, { roughness: 0.35 });
+  const mPupil = std(0x151009, { roughness: 0.22 });
+  const mGlint = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const mPad   = std(0x2e2013, { roughness: 0.7 });
+  const camoV  = camoTex('#b39d66', ['#6b6b3f', '#4e4432', '#d8c894', '#8a7a4c']);
+  const camoH  = camoTex('#9b8a58', ['#3f4229', '#5c4a30', '#c9b987', '#75704a']);
+  const mGear  = new THREE.MeshStandardMaterial({ color: 0xffffff, map: camoV, roughness: 0.94, metalness: 0.02 });
+  const mHelm  = new THREE.MeshStandardMaterial({ color: 0xffffff, map: camoH, roughness: 0.55, metalness: 0.05 });
+  const mStrap = std(0x2e2f31, { roughness: 0.85 });
+  const mPouch = std(0x57573c, { roughness: 0.9 });
+  const mLid   = std(0x2b2b24, { roughness: 0.85 });
+  const mBlack = std(0x1c1e20, { roughness: 0.8 });
+  const mBuckle = std(0x7a7a7e, { roughness: 0.4, metalness: 0.65 });
+  const mFoam  = std(0x242426, { roughness: 0.95 });
+  P.mats = [mSkin, mShade, mBelly, mEarIn, mNose, mIris, mPupil, mPad, mGear, mHelm, mStrap, mPouch, mLid, mBlack, mBuckle, mFoam];
+
+  /* ---------- 通用：两点之间生成锥台肢体（球帽端点自然融合，无拼接缝） ---------- */
+  const _la = new THREE.Vector3(), _lb = new THREE.Vector3(), _ld = new THREE.Vector3();
+  function limb(A, B, rA, rB, mat) {
+    _la.set(A[0], A[1], A[2]); _lb.set(B[0], B[1], B[2]);
+    _ld.copy(_lb).sub(_la); const len = Math.max(0.02, _ld.length());
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rB, rA, len, 14, 1), mat);
+    m.quaternion.setFromUnitVectors(_UP, _ld.divideScalar(len));
+    m.position.copy(_la).add(_lb).multiplyScalar(0.5);
+    const capA = mesh(new THREE.SphereGeometry(rA, 12, 10), mat, A[0], A[1], A[2]);
+    const capB = mesh(new THREE.SphereGeometry(rB, 12, 10), mat, B[0], B[1], B[2]);
+    const g = new THREE.Group(); g.add(m, capA, capB);
+    return g;
+  }
+  /* 贝塞尔插值点列（麦克风弯管 / 绷带曲线用） */
+  function bez3(A, M, B, n) {
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, s = 1 - t;
+      pts.push([s * s * A[0] + 2 * t * s * M[0] + t * t * B[0],
+                s * s * A[1] + 2 * t * s * M[1] + t * t * B[1],
+                s * s * A[2] + 2 * t * s * M[2] + t * t * B[2]]);
+    }
+    return pts;
+  }
+
   const root = new THREE.Group();
   const visual = new THREE.Group();
   root.add(visual);
-  // 腿
-  const legGeo = new THREE.CapsuleGeometry(0.17, 0.4, 4, 10);
-  P.legL = mesh(legGeo, mShade, -0.26, 0.5, 0);
-  P.legR = mesh(legGeo, mShade, 0.26, 0.5, 0);
-  visual.add(P.legL, P.legR);
-  const footGeo = new THREE.SphereGeometry(0.21, 10, 8);
-  P.footL = mesh(footGeo, mDark, -0.28, 0.12, 0.1);
-  P.footR = mesh(footGeo, mDark, 0.28, 0.12, 0.1);
-  P.footL.scale.set(1, 0.6, 1.25); P.footR.scale.set(1, 0.6, 1.25);
-  visual.add(P.footL, P.footR);
-  // 身体
-  P.torso = mesh(new THREE.SphereGeometry(0.64, 22, 18), mBody, 0, 1.02, 0);
+
+  /* ---------- createBody：胖乎乎的黄色躯干 + 浅黄腹部 ---------- */
+  const torsoGeo = new THREE.SphereGeometry(PCFG.bodyR, 24, 20);
+  torsoGeo.scale(1, 1.04, 0.96); // 预变形进几何体：P.torso.scale 保持动画契约 (1, .95, .9)
+  P.torso = new THREE.Mesh(torsoGeo, mSkin);
   P.torso.scale.set(1, 0.95, 0.9);
+  P.torso.position.set(0, PCFG.bodyY, 0);
   visual.add(P.torso);
-  const belly = mesh(new THREE.SphereGeometry(0.46, 18, 14), mBelly, 0, 0.9, 0.36);
-  belly.scale.set(1, 0.85, 0.5);
+  const belly = mesh(new THREE.SphereGeometry(0.42, 18, 14), mBelly, 0, PCFG.bodyY - 0.15, 0.36);
+  belly.scale.set(1.15, 1.0, 0.5);
   visual.add(belly);
-  const backPatch = mesh(new THREE.SphereGeometry(0.5, 18, 14), mShade, 0, 1.02, -0.35);
-  backPatch.scale.set(0.9, 0.8, 0.35);
-  visual.add(backPatch);
-  // 头
+
+  /* ---------- createHead：大头 + 短宽口鼻 + 棕鼻头 + 大眼 ---------- */
   P.head = new THREE.Group();
-  P.head.position.set(0, 1.78, 0.02);
-  const headM = mesh(new THREE.SphereGeometry(0.45, 20, 16), mBody, 0, 0, 0);
-  headM.scale.set(1.05, 0.95, 0.95);
-  P.head.add(headM);
-  const eyeGeo = new THREE.SphereGeometry(0.075, 8, 8);
-  P.head.add(mesh(eyeGeo, mDark, -0.17, 0.06, 0.38), mesh(eyeGeo, mDark, 0.17, 0.06, 0.38));
-  const glintGeo = new THREE.SphereGeometry(0.025, 6, 6);
-  P.head.add(mesh(glintGeo, std(0xffffff, { roughness: 0.3 }), -0.145, 0.09, 0.44), mesh(glintGeo, std(0xffffff, { roughness: 0.3 }), 0.195, 0.09, 0.44));
-  const mouth = mesh(new THREE.TorusGeometry(0.12, 0.035, 6, 12, Math.PI), mDark, 0, -0.14, 0.38);
+  P.head.position.set(0, P_HEAD_Y, 0.02);
+  const skull = mesh(new THREE.SphereGeometry(PCFG.headR, 24, 18), mSkin, 0, 0.02, 0);
+  skull.scale.set(1.04, 0.94, 0.98);
+  P.head.add(skull);
+  // 短宽吻部：中央扁平大球 + 两侧腮球（自然连续轮廓）
+  const muzzle = mesh(new THREE.SphereGeometry(0.30, 18, 14), mSkin, 0, -0.13, 0.38);
+  muzzle.scale.set(1.25, 0.62, 0.82);
+  P.head.add(muzzle);
+  P.head.add(mesh(new THREE.SphereGeometry(0.155, 12, 10), mSkin, -0.17, -0.16, 0.38),
+             mesh(new THREE.SphereGeometry(0.155, 12, 10), mSkin, 0.17, -0.16, 0.38));
+  // 棕色椭圆鼻头（微光泽）
+  const nose = mesh(new THREE.SphereGeometry(0.085, 14, 10), mNose, 0, -0.055, 0.615);
+  nose.scale.set(1.35, 0.78, 0.92);
+  P.head.add(nose);
+  // 嘴：细弧线（保持原有风格）
+  const mouth = mesh(new THREE.TorusGeometry(0.115, 0.032, 6, 14, Math.PI), mPupil, 0, -0.215, 0.6);
   mouth.rotation.z = Math.PI;
   P.head.add(mouth);
-  const hornGeo = new THREE.ConeGeometry(0.1, 0.24, 8);
-  const hL = mesh(hornGeo, mAcc, -0.2, 0.42, 0.05), hR = mesh(hornGeo, mAcc, 0.2, 0.42, 0.05);
-  hL.rotation.z = 0.3; hR.rotation.z = -0.3;
-  P.head.add(hL, hR);
-  visual.add(P.head);
-  // 手臂
-  const armGeo = new THREE.CapsuleGeometry(0.12, 0.34, 4, 10);
-  P.armL = mesh(armGeo, mBody, -0.58, 1.3, 0.05);
-  P.armL.rotation.z = 0.35;
-  visual.add(P.armL);
-  P.armR = new THREE.Group();
-  P.armR.position.set(0.52, 1.42, 0.12);
-  const armRm = mesh(armGeo, mBody, 0.06, -0.1, 0.22);
-  armRm.rotation.x = -1.25;
-  P.armR.add(armRm);
-  // 武器（P5：深灰黑枪械）
+  // 大眼：深棕虹膜鼓出 + 黑瞳 + 双高光（连头顶亮斑）
+  [-1, 1].forEach(sd => {
+    const eg = new THREE.Group();
+    eg.position.set(sd * 0.185, 0.045, 0.43);
+    eg.rotation.y = sd * 0.2;
+    eg.scale.setScalar(PCFG.eyeSize);
+    const iris = mesh(new THREE.SphereGeometry(0.105, 14, 12), mIris);
+    iris.scale.set(0.92, 1.18, 0.55);
+    eg.add(iris);
+    const pupil = mesh(new THREE.SphereGeometry(0.06, 10, 8), mPupil, 0, -0.012, 0.056);
+    pupil.scale.set(0.95, 1.12, 0.5);
+    eg.add(pupil);
+    eg.add(mesh(new THREE.SphereGeometry(0.027, 8, 6), mGlint, 0.03, 0.05, 0.095),
+           mesh(new THREE.SphereGeometry(0.013, 6, 6), mGlint, -0.032, -0.02, 0.1));
+    P.head.add(eg);
+  });
+
+  /* ---------- createHeadset：战术耳机（耳罩+支架+连接结构）+ 麦克风 ---------- */
+  function buildHeadset() {
+    const hs = new THREE.Group();
+    [-1, 1].forEach(sd => {
+      // 头盔侧轨挂点
+      hs.add(mesh(new THREE.BoxGeometry(0.05, 0.17, 0.26), mBlack, sd * 0.545, 0.16, 0.0));
+      // 头盔边沿螺栓 + 支架
+      const bolt = mesh(new THREE.CylinderGeometry(0.02, 0.022, 0.022, 8), mBuckle, sd * 0.56, 0.28, 0.16);
+      bolt.rotation.x = sd * Math.PI / 2;
+      hs.add(bolt);
+      // 耳罩臂：侧轨 → 耳罩
+      hs.add(limb([sd * 0.52, 0.1, 0.06], [sd * 0.59, 0.0, 0.09], 0.022, 0.022, mStrap));
+      // 耳罩：黑圆盘 + 胶圈 + 中心盖
+      const cup = mesh(new THREE.CylinderGeometry(0.125, 0.135, 0.09, 16), mBlack, sd * 0.615, -0.01, 0.09);
+      cup.rotation.z = sd * Math.PI / 2;
+      hs.add(cup);
+      const ring = mesh(new THREE.TorusGeometry(0.098, 0.033, 8, 16), mStrap, sd * 0.66, -0.01, 0.09);
+      ring.rotation.y = sd * Math.PI / 2;
+      hs.add(ring);
+      const cap = mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.03, 10), mBuckle, sd * 0.665, -0.01, 0.09);
+      cap.rotation.z = sd * Math.PI / 2;
+      hs.add(cap);
+    });
+    // 麦克风：左耳罩出发的弯臂延伸至口鼻前（球珠链 + 泡棉黑头）
+    const micPts = bez3([-0.64, -0.02, 0.14], [-0.56, -0.3, 0.55], [-0.16, -0.2, 0.63], 7);
+    for (let i = 0; i < micPts.length - 1; i++) hs.add(limb(micPts[i], micPts[i + 1], 0.014, 0.014, mStrap));
+    const foam = mesh(new THREE.SphereGeometry(0.038, 10, 8), mFoam, -0.16, -0.19, 0.655);
+    foam.scale.set(1.1, 0.9, 1.25);
+    hs.add(foam);
+    return hs;
+  }
+  P.head.add(buildHeadset());
+
+  /* ---------- createHeadset 附属：下颌固定带（左右两条下挂织带） ---------- */
+  [-1, 1].forEach(sd => {
+    const pts = bez3([sd * 0.4, 0.16, 0.36], [sd * 0.42, -0.18, 0.42], [sd * 0.17, -0.36, 0.24], 5);
+    for (let i = 0; i < pts.length - 1; i++) P.head.add(limb(pts[i], pts[i + 1], 0.016, 0.016, mStrap));
+  });
+
+  /* ---------- createHelmet：迷彩圆壳 + 檐圈 + 前檐 + 螺栓 + 侧轨 ---------- */
+  (function buildHelmet() {
+    const S = PCFG.helmetSize;
+    const helm = new THREE.Group();
+    helm.scale.setScalar(S);
+    // 壳体：纬向球带（贴合头部曲率覆盖头顶，避开眼部）
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(PCFG.headR + 0.05, 26, 14, 0, TAU, 0, Math.PI * 0.4), mHelm);
+    shell.scale.set(1.05, 0.86, 1.07);
+    helm.add(shell);
+    // 檐圈（收边）
+    const rim = mesh(new THREE.TorusGeometry(PCFG.headR + 0.04, 0.024, 8, 30), mHelm, 0, PCFG.headR * 0.28, 0);
+    rim.rotation.x = Math.PI / 2;
+    rim.scale.set(1.06, 1.14, 1);
+    helm.add(rim);
+    // 前檐：带前倾的半环压在眼上方
+    const brim = mesh(new THREE.TorusGeometry(PCFG.headR + 0.035, 0.042, 8, 18, Math.PI), mHelm, 0, PCFG.headR * 0.3, 0.02);
+    brim.rotation.x = Math.PI / 2 + 0.1;
+    helm.add(brim);
+    // 螺栓 ×4
+    [[-1, 0.16], [-1, -0.2], [1, 0.16], [1, -0.2]].forEach(v => {
+      const b = mesh(new THREE.CylinderGeometry(0.018, 0.02, 0.02, 8), mBuckle, v[0] * (PCFG.headR + 0.045), 0.26, v[1]);
+      b.rotation.z = Math.PI / 2; // 轴向朝外
+      helm.add(b);
+    });
+    P.head.add(helm);
+  })();
+
+  /* ---------- createLimbs：短臂 / 前伸短腿（髋踝两关节） ---------- */
+  function buildLimb(sd) {
+    return function () {
+      const leg = new THREE.Group();
+      leg.position.set(sd * 0.26, 0.68, 0);
+      leg.add(limb([sd * -0.02, 0, 0.02], [sd * -0.06, -0.3, 0.16], 0.17, 0.13, mSkin));      // 大腿（前伸）
+      leg.add(limb([sd * -0.06, -0.3, 0.16], [sd * -0.1, -0.52, 0.22], 0.13, 0.11, mSkin));   // 小腿
+      const foot = new THREE.Group(); // P.footL/R = 踝关节子节点：随腿摆动 + 独立俯仰
+      foot.position.set(sd * -0.1, -0.55, 0.24);
+      const sole = mesh(new THREE.SphereGeometry(0.165, 14, 10), mShade, 0, -0.005, 0.05);
+      sole.scale.set(0.95, 0.56, 1.35);
+      foot.add(sole);
+      foot.add(mesh(new THREE.SphereGeometry(0.072, 10, 8), mPad, sd * 0.055, -0.02, 0.17),
+               mesh(new THREE.SphereGeometry(0.072, 10, 8), mPad, sd * -0.06, -0.02, 0.17),
+               mesh(new THREE.SphereGeometry(0.09, 10, 8), mShade, 0, 0.05, -0.09));
+      leg.add(foot);
+      return { leg, foot };
+    }();
+  }
+  const LL = buildLimb(-1), LR = buildLimb(1);
+  P.legL = LL.leg; P.footL = LL.foot;
+  P.legR = LR.leg; P.footR = LR.foot;
+  visual.add(P.legL, P.legR);
+
+  /* ---------- createLimbs（手臂）：肩关节 + 上臂 + 前臂（前伸握枪） ---------- */
+  function buildArm(sd) {
+    const arm = new THREE.Group();
+    arm.position.set(sd * 0.55, 1.46, 0.08);
+    arm.add(mesh(new THREE.SphereGeometry(0.155, 14, 10), mSkin, sd * 0.01, 0.02, 0));      // 肩球
+    arm.add(limb([sd * 0.03, 0, 0.02], [sd * 0.06, -0.28, 0.08], 0.125, 0.105, mSkin));      // 上臂
+    arm.add(limb([sd * 0.06, -0.28, 0.08], [sd * 0.1, -0.04, 0.38], 0.105, 0.09, mSkin));    // 前臂（向前抱枪）
+    arm.add(mesh(new THREE.SphereGeometry(0.105, 12, 10), mSkin, sd * 0.1, -0.02, 0.42));    // 拳
+    return arm;
+  }
+  P.armL = buildArm(-1);
+  P.armR = buildArm(1);
+  visual.add(P.armL, P.armR);
+
+  /* ---------- createTail：后伸大尾（粗环弧 + 尾尖球，P.tail 翘摆） ---------- */
+  (function createTail() {
+    const tail = new THREE.Group();
+    tail.position.set(0, 0.72, -0.5);
+    const arcR = 0.52 * PCFG.tailCurve;
+    const arcM = mesh(new THREE.TorusGeometry(arcR, 0.16, 12, 22, 1.7), mShade, 0, -arcR * 0.15, -arcR * 0.62);
+    arcM.rotation.y = Math.PI / 2;   // 环面竖置：圆弧落在身体正后方 YZ 平面
+    arcM.rotation.x = Math.PI * 0.28; // 起弧朝后上、收尾前翘
+    tail.add(arcM);
+    tail.add(mesh(new THREE.SphereGeometry(0.11, 10, 8), mShade, 0, arcR * 0.14, -arcR * 1.12));
+    P.tail = tail;
+    visual.add(tail);
+  })();
+
+  /* ---------- createVest：战术背心（贴身球带 + 肩带 + 板十字织带） ---------- */
+  (function createVest() {
+    const y0 = PCFG.bodyY;
+    const band = new THREE.Mesh(new THREE.SphereGeometry(PCFG.bodyR + PCFG.vestThick, 26, 12, 0, TAU, Math.PI * 0.26, Math.PI * 0.28), mGear);
+    band.scale.set(1, 0.95, 0.9); // 与躯干同二次比例，贴身包覆
+    band.position.set(0, y0, 0);
+    band.material.map.repeat.set(3, 1.6);
+    visual.add(band);
+    // 下摆收边
+    const hem = mesh(new THREE.TorusGeometry(PCFG.bodyR + PCFG.vestThick - 0.02, 0.03, 8, 30), mGear, 0, y0 - 0.14, 0);
+    hem.rotation.x = Math.PI / 2;
+    hem.scale.set(1.0, 1.09, 1);
+    visual.add(hem);
+    // 肩带：环肩弧带 ×2
+    [-1, 1].forEach(sd => {
+      const st = mesh(new THREE.TorusGeometry(0.42, 0.05, 8, 14, 2.4), mStrap, sd * 0.16, 1.52, 0.02);
+      st.rotation.y = Math.PI / 2;
+      st.rotation.z = sd * 1.2;
+      visual.add(st);
+    });
+    // 板十字：前胸竖织带 + 横织带（贴壳表面）
+    [-1, 1].forEach(sd => {
+      const pts = bez3([sd * 0.1, 1.62, 0.44], [sd * 0.12, 1.25, 0.68], [0.02, 0.92, 0.62], 5);
+      for (let i = 0; i < pts.length - 1; i++) visual.add(limb(pts[i], pts[i + 1], 0.032, 0.032, mStrap));
+    });
+    const hz = bez3([-0.36, 1.26, 0.56], [0, 1.2, 0.66], [0.36, 1.26, 0.56], 6);
+    for (let i = 0; i < hz.length - 1; i++) visual.add(limb(hz[i], hz[i + 1], 0.03, 0.03, mStrap));
+    const hz2 = bez3([-0.34, 0.98, 0.6], [0, 0.94, 0.68], [0.34, 0.98, 0.6], 6);
+    for (let i = 0; i < hz2.length - 1; i++) visual.add(limb(hz2[i], hz2[i + 1], 0.026, 0.026, mStrap));
+    // 背面竖织带 ×2
+    [-1, 1].forEach(sd => {
+      const pts = bez3([sd * 0.14, 1.58, -0.42], [sd * 0.15, 1.2, -0.66], [sd * 0.05, 0.94, -0.6], 5);
+      for (let i = 0; i < pts.length - 1; i++) visual.add(limb(pts[i], pts[i + 1], 0.03, 0.03, mStrap));
+    });
+  })();
+
+  /* ---------- createPouches：胸前弹匣袋 / 工具袋 + 腰带侧包（独立厚度+盖片+扣具） ---------- */
+  (function createPouches() {
+    // 胸前弹匣袋：横排，随胸口曲率外凸
+    const n = PCFG.pouchCount, span = 0.19;
+    for (let i = 0; i < n; i++) {
+      const fx = (i - (n - 1) / 2) * span;
+      const fz = 0.6 * Math.sqrt(Math.max(0.05, 1 - (fx / (PCFG.bodyR + PCFG.vestThick + 0.06)) ** 2)) * 0.9 + 0.08;
+      const g = new THREE.Group();
+      g.position.set(fx, 1.06, fz);
+      g.rotation.x = -0.12;
+      g.rotation.y = fx * 0.55;
+      g.add(mesh(new THREE.BoxGeometry(0.15, 0.18, 0.1), mPouch, 0, 0, 0));
+      g.add(mesh(new THREE.BoxGeometry(0.158, 0.055, 0.11), mLid, 0, 0.075, -0.005));     // 盖片（略凸出）
+      g.add(mesh(new THREE.BoxGeometry(0.028, 0.085, 0.02), mStrap, 0, -0.005, -0.055));   // 门面织带扣
+      g.add(mesh(new THREE.BoxGeometry(0.034, 0.03, 0.026), mBuckle, 0, -0.04, -0.058));   // 金属搭扣
+      visual.add(g);
+    }
+    // 右胸大弹匣袋（黑）
+    const rp = new THREE.Group();
+    rp.position.set(0.37, 1.3, 0.5); rp.rotation.set(-0.1, 0.42, 0);
+    rp.add(mesh(new THREE.BoxGeometry(0.17, 0.21, 0.1), mLid, 0, 0, 0));
+    rp.add(mesh(new THREE.BoxGeometry(0.18, 0.06, 0.11), mBlack, 0, 0.09, -0.005));
+    rp.add(mesh(new THREE.BoxGeometry(0.03, 0.09, 0.02), mStrap, 0, -0.01, -0.052));
+    visual.add(rp);
+    // 左胸电台袋 + 钮
+    const radio = new THREE.Group();
+    radio.position.set(-0.37, 1.34, 0.48); radio.rotation.set(-0.08, -0.42, 0);
+    radio.add(mesh(new THREE.BoxGeometry(0.14, 0.19, 0.09), mBlack, 0, 0, 0));
+    radio.add(mesh(new THREE.BoxGeometry(0.15, 0.05, 0.1), mLid, 0, 0.085, -0.004));
+    radio.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.05, 8), mBuckle, 0.045, -0.02, -0.05));
+    visual.add(radio);
+    // 腰带 + 扣具
+    const belt = mesh(new THREE.TorusGeometry(0.62, 0.038, 8, 30), mStrap, 0, 0.62, 0);
+    belt.rotation.x = Math.PI / 2;
+    belt.scale.set(1.03, 0.94, 1);
+    visual.add(belt);
+    visual.add(mesh(new THREE.BoxGeometry(0.12, 0.085, 0.03), mBuckle, 0, 0.63, 0.63));
+    // 侧挂腰包 ×2（贴合胯侧轮廓）
+    [-1, 1].forEach(sd => {
+      const sp = new THREE.Group();
+      sp.position.set(sd * 0.56, 0.64, 0.18);
+      sp.rotation.y = sd * 0.9;
+      sp.add(mesh(new THREE.BoxGeometry(0.13, 0.17, 0.09), mPouch, 0, 0, 0));
+      sp.add(mesh(new THREE.BoxGeometry(0.14, 0.05, 0.1), mLid, 0, 0.075, -0.004));
+      sp.add(mesh(new THREE.BoxGeometry(0.026, 0.07, 0.018), mStrap, 0, -0.01, -0.047));
+      visual.add(sp);
+    });
+    // 背后翻盖大包
+    const back = new THREE.Group();
+    back.position.set(0, 1.22, -0.58); back.rotation.x = 0.08;
+    back.add(mesh(new THREE.BoxGeometry(0.2, 0.22, 0.11), mPouch, 0, 0, 0));
+    back.add(mesh(new THREE.BoxGeometry(0.21, 0.06, 0.12), mLid, 0, 0.1, 0.004));
+    back.add(mesh(new THREE.BoxGeometry(0.03, 0.1, 0.02), mStrap, 0, -0.02, 0.055));
+    visual.add(back);
+  })();
+
+  /* ---------- 武器（保持枪械契约：P.gun / P.muzzle / 残影剥离 / GLB 挂点） ---------- */
   const mGun = std(0x2b2b31, { roughness: 0.45, metalness: 0.35 });
   const mGunD = std(0x141417, { roughness: 0.5, metalness: 0.3 });
   P.gun = new THREE.Group();
@@ -1095,18 +1387,39 @@ const P = { root: null, visual: null, legL: null, legR: null, footL: null, footR
   P.flashLight = new THREE.PointLight(0xffb050, 0, 7);
   P.flashLight.position.copy(P.muzzle.position);
   P.gun.add(P.flashLight);
-  // 尾巴
-  const tail = mesh(new THREE.ConeGeometry(0.11, 0.45, 8), mShade, 0, 0.75, -0.55);
-  tail.rotation.x = -1.0;
-  visual.add(tail);
+
+  /* ---------- 耳朵：细长三节弯体 + 内耳色（头盔两侧自然探出） ---------- */
+  [-1, 1].forEach(sd => {
+    const ear = new THREE.Group();
+    const L = PCFG.earLen;
+    ear.position.set(sd * 0.27, 0.3, -0.05);
+    ear.rotation.z = sd * PCFG.earTilt;     // 外倾
+    ear.rotation.x = -0.05;
+    ear.add(limb([0, 0, 0], [0, 0.3 * L, 0.01], 0.13, 0.1, mSkin));
+    // 二节：上节前倾弯
+    const j = limb([0, 0.3 * L, 0.01], [0.0, 0.52 * L, 0.05], 0.1, 0.07, mSkin);
+    j.rotation.z = sd * 0.12;
+    ear.add(j);
+    // 三节：更细再翘
+    const j2 = limb([0.0, 0.52 * L + 0.02, 0.05], [sd * 0.02, 0.72 * L, 0.03], 0.07, 0.048, mSkin);
+    j2.rotation.z = sd * 0.1;
+    ear.add(j2);
+    ear.add(mesh(new THREE.SphereGeometry(0.06, 10, 8), mSkin, 0, 0.72 * L, 0.03));
+    // 内耳色斑（前面开口的薄片感）
+    const inner = mesh(new THREE.SphereGeometry(0.075, 10, 8), mEarIn, 0, 0.28 * L, 0.09);
+    inner.scale.set(0.62, 2.1, 0.5);
+    ear.add(inner);
+    P.head.add(ear);
+  });
+  visual.add(P.head); // 头组（含盔/耳机/麦克风/耳朵）挂上场景
   root.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
-  // 眩晕星星（挂 root：不随 visual 摆动，也不进残影克隆）
+  // 眩晕星星（挂 root：不随 visual 摆动，也不进残影克隆）；轨道抬到盔沿上方、耳朵内侧
   P.stars = new THREE.Group();
-  P.stars.position.set(0, 2.42, 0);
+  P.stars.position.set(0, 2.5, 0);
   const starGeo = new THREE.OctahedronGeometry(0.1);
   for (let i = 0; i < 5; i++) {
     const a = i / 5 * TAU;
-    const st = mesh(starGeo, new THREE.MeshBasicMaterial({ color: 0xffd24f }), Math.cos(a) * 0.55, 0, Math.sin(a) * 0.55);
+    const st = mesh(starGeo, new THREE.MeshBasicMaterial({ color: 0xffd24f }), Math.cos(a) * 0.72, 0, Math.sin(a) * 0.72);
     st.rotation.set(0.4, a, 0);
     P.stars.add(st);
   }
@@ -1278,7 +1591,7 @@ function animatePlayer(dt, moving, iLen) {
       P.armL.rotation.x = -1.7; P.armL.rotation.z = 2.2;
       P.visual.position.y = 0; P.visual.scale.set(1, 1, 1);
       P.torso.rotation.z = 0;
-      P.head.position.y = 1.78; P.head.rotation.set(0.18, 0, 0);
+      P.head.position.y = P_HEAD_Y; P.head.rotation.set(0.18, 0, 0);
     } else {
       P.visual.rotation.x = 0.08;
       P.visual.rotation.z = Math.sin(t * 8.5) * 0.13;
@@ -1287,7 +1600,7 @@ function animatePlayer(dt, moving, iLen) {
       P.armL.rotation.x = -0.35; P.armL.rotation.z = 0.5 + Math.sin(t * 8.5) * 0.18;
       P.visual.position.y = 0; P.visual.scale.set(1, 1, 1);
       P.torso.rotation.z = 0;
-      P.head.position.y = 1.78;
+      P.head.position.y = P_HEAD_Y;
       P.head.rotation.set(0, Math.sin(t * 9.5) * 0.28, Math.sin(t * 11) * 0.2);
     }
     // 眩晕落地的滑稽大挤压
@@ -1322,7 +1635,7 @@ function animatePlayer(dt, moving, iLen) {
     P.visual.position.y = Math.abs(s) * 0.055 + Math.abs(c) * 0.045;
     P.visual.scale.set(1 + Math.abs(s) * 0.03, 1 - Math.abs(s) * 0.04, 1 + Math.abs(s) * 0.02); // 步伐挤压拉伸
     P.torso.rotation.z = s * 0.06;
-    P.head.position.y = 1.78 + Math.abs(c) * 0.045;
+    P.head.position.y = P_HEAD_Y + Math.abs(c) * 0.045;
     P.head.rotation.y = s * 0.15;
     P.head.rotation.z = -s * 0.07;
   } else if (!player.grounded) {
@@ -1339,7 +1652,7 @@ function animatePlayer(dt, moving, iLen) {
     P.visual.position.y = 0;
     P.visual.scale.set(1 - k * 0.03, 1 + k * 0.07, 1 - k * 0.03); // 上升伸展/下落回缩
     P.torso.rotation.z = 0;
-    P.head.position.y = 1.78;
+    P.head.position.y = P_HEAD_Y;
     P.head.rotation.y = 0; P.head.rotation.z = 0;
   } else {
     // —— 站立呼吸（托枪待命）——
@@ -1354,7 +1667,7 @@ function animatePlayer(dt, moving, iLen) {
     P.visual.scale.set(1, 1, 1);
     P.torso.scale.set(1 + br * 0.4, 0.95 + br, 0.9 + br * 0.4);
     P.torso.rotation.z = 0;
-    P.head.position.y = 1.78 + br * 0.5;
+    P.head.position.y = P_HEAD_Y + br * 0.5;
     P.head.rotation.y = 0; P.head.rotation.z = 0;
   }
   // —— 落地挤压（叠加在走路/站立之上，冲击越猛越深）——
@@ -1371,6 +1684,12 @@ function animatePlayer(dt, moving, iLen) {
     P.armL.rotation.x += rc * 0.16;
     P.armL.rotation.z += rs * rc * 0.08;
     P.torso.rotation.z += rs * rc * 0.06;
+  }
+  // —— 尾巴：走路左右轻摆 · 空中随升降摆动 · 待机慢摆 · 后坐甩尾 ——
+  if (P.tail) {
+    P.tail.rotation.y = walking ? Math.sin(player.walkPhase * 0.5) * 0.32 : Math.sin(t * 1.8) * 0.15;
+    P.tail.rotation.y += rs * rc * 0.18;
+    P.tail.rotation.x = walking ? Math.sin(player.walkPhase) * 0.07 : (player.grounded ? -0.05 : clamp(player.velY * 0.012, -0.32, 0.3));
   }
   // —— 持枪：枪口跟随视角俯仰 + 呼吸/步伐微晃 + 后坐（抬枪/扭矩/套筒后滑/枪口上翘）——
   const sway = walking ? Math.sin(player.walkPhase) * 0.03 : Math.sin(t * 2.2) * 0.015;
