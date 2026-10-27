@@ -230,7 +230,8 @@ const CONFIG = {
   skills: {
     ray:    { range: 9.5, warn: 0.8, duration: 3, cooldown: 1.5, dps: 2, tick: 0.5, trackDeg: 65, missDeg: 24, length: 22 }, // range 覆盖 keepBand(6~9)：距离一近就必放
     cheese: { range: 14, warn: 1.0, duration: 5, cooldown: 3, damage: 4, radius: 2.2, interval: 0.85, fallTime: 0.65, fallHeight: 16 },
-    wave:   { range: 10, warn: 0.5, cooldown: 4.5, damage: 10, knockback: 10, speed: 11, maxRadius: 16, thickness: 1.2 }
+    wave:   { range: 10, warn: 0.5, cooldown: 4.5, damage: 10, knockback: 10, speed: 11, maxRadius: 16, thickness: 1.2 },
+    repel:  { range: 5.2, warn: 0.4, cooldown: 8, damage: 5, stun: 2, knockback: 13, knockUp: 12 } // 被动·贴身弹飞：急转弹飞+眩晕（各阶段通用）
   },
   fx: { shakeDecay: 6 }
 };
@@ -324,6 +325,8 @@ const Sfx = (() => {
     cheeseSplat() { noise(0.18, 0.28, 800, 'lowpass', 0, 140); tone(150, 55, 0.16, 'triangle', 0.2); },
     laugh() { [0, 0.13, 0.26, 0.39].forEach((d, i) => tone(310 - i * 35, 165, 0.11, 'square', 0.18, d)); },
     waveBoom() { tone(165, 34, 0.6, 'sine', 0.45); noise(0.5, 0.22, 500, 'lowpass', 0, 70); },
+    repelWarn() { tone(190, 780, 0.32, 'sawtooth', 0.22); noise(0.3, 0.1, 900, 'bandpass'); },
+    repelHit() { tone(130, 38, 0.5, 'sine', 0.42); noise(0.3, 0.32, 600, 'lowpass', 0, 80); tone(560, 240, 0.12, 'square', 0.15, 0.02); },
     phase() { [420, 540, 680, 860].forEach((f, i) => tone(f, f * 1.12, 0.16, 'triangle', 0.2, i * 0.09)); },
     frogDown() { tone(300, 55, 0.5, 'sawtooth', 0.28); noise(0.4, 0.26, 320); [0, 0.22, 0.38].forEach((d, i) => tone(210 - i * 55, 70, 0.13, 'square', 0.18, d)); },
     victory() { [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.22, 'triangle', 0.22, i * 0.14)); tone(1046, 1046, 0.65, 'sine', 0.18, 0.58); },
@@ -936,10 +939,10 @@ const player = {
   hp: CONFIG.player.maxHp,
   fireCd: 0, jumpCd: 0, jumpInv: 0, invTimer: 0, hurtFlash: 0,
   walkPhase: 0, gunRecoil: 0, flashTimer: 0, landSquash: 0,
-  knockTimer: 0, dead: false, celebrate: false,
+  knockTimer: 0, stunT: 0, dead: false, celebrate: false,
   stats: { shots: 0, hits: 0, ricochets: 0, dmgTaken: 0 }
 };
-const P = { root: null, visual: null, legL: null, legR: null, footL: null, footR: null, armL: null, armR: null, gun: null, muzzle: null, head: null, torso: null, flash: null, flashLight: null, mats: [] };
+const P = { root: null, visual: null, legL: null, legR: null, footL: null, footR: null, armL: null, armR: null, gun: null, muzzle: null, head: null, torso: null, flash: null, flashLight: null, stars: null, mats: [] };
 
 (function buildPlayer() {
   const cBody = 0xf5c542, cShade = 0xdfa32e, cDark = 0x2a1d0e, cBelly = 0xfbf0d0, cAcc = 0xc97a20, cCream = 0xffebc4;
@@ -1032,6 +1035,18 @@ const P = { root: null, visual: null, legL: null, legR: null, footL: null, footR
   tail.rotation.x = -1.0;
   visual.add(tail);
   root.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
+  // 眩晕星星（挂 root：不随 visual 摆动，也不进残影克隆）
+  P.stars = new THREE.Group();
+  P.stars.position.set(0, 2.42, 0);
+  const starGeo = new THREE.OctahedronGeometry(0.1);
+  for (let i = 0; i < 5; i++) {
+    const a = i / 5 * TAU;
+    const st = mesh(starGeo, new THREE.MeshBasicMaterial({ color: 0xffd24f }), Math.cos(a) * 0.55, 0, Math.sin(a) * 0.55);
+    st.rotation.set(0.4, a, 0);
+    P.stars.add(st);
+  }
+  P.stars.visible = false;
+  root.add(P.stars);
   P.root = root; P.visual = visual;
   root.position.copy(player.pos);
   root.rotation.y = player.yaw;
@@ -1106,6 +1121,7 @@ function updatePlayer(dt) {
   const rx = -Math.cos(player.yaw), rz = Math.sin(player.yaw); // 屏幕右方向（相机从角色身后看）
   let ix = (input.keys['KeyD'] ? 1 : 0) - (input.keys['KeyA'] ? 1 : 0) + input.joyX;
   let iz = (input.keys['KeyW'] ? 1 : 0) - (input.keys['KeyS'] ? 1 : 0) - input.joyY;
+  if (player.stunT > 0) { ix = 0; iz = 0; } // 眩晕：移动失灵
   const iLen = Math.hypot(ix, iz);
   if (iLen > 1) { ix /= iLen; iz /= iLen; }
   const moving = iLen > 0.1;
@@ -1130,7 +1146,7 @@ function updatePlayer(dt) {
   }
   // 跳跃
   player.jumpCd -= dt;
-  if ((input.keys['Space'] || input.jumpQueued) && player.grounded && player.jumpCd <= 0) {
+  if ((input.keys['Space'] || input.jumpQueued) && player.grounded && player.jumpCd <= 0 && player.stunT <= 0) {
     input.jumpQueued = false;
     player.velY = JUMP_VEL;
     player.grounded = false;
@@ -1142,7 +1158,7 @@ function updatePlayer(dt) {
     Particles.spawn(player.pos.x, 0.12, player.pos.z, 10, { color: 0xffffff, color2: 0xffe27a, speed: 3.5, up: 0.5, life: 0.45, grav: 5 });
   }
   input.jumpQueued = false;
-  player.invTimer -= dt; player.hurtFlash -= dt; player.knockTimer -= dt; player.jumpInv -= dt;
+  player.invTimer -= dt; player.hurtFlash -= dt; player.knockTimer -= dt; player.jumpInv -= dt; player.stunT = Math.max(0, player.stunT - dt);
   // 场地约束
   const R = CONFIG.world.arenaRadius - 0.8;
   const pd = Math.hypot(player.pos.x, player.pos.z);
@@ -1154,7 +1170,7 @@ function updatePlayer(dt) {
   if (fd < sep && fd > 0.001) { _v1.multiplyScalar((sep - fd) / fd); player.pos.add(_v1); }
   // 开火
   player.fireCd -= dt;
-  if (input.fire && player.fireCd <= 0) {
+  if (input.fire && player.fireCd <= 0 && player.stunT <= 0) {
     player.fireCd = 1 / pc.fireRate;
     shoot();
   }
@@ -1170,6 +1186,7 @@ function updatePlayer(dt) {
 
 function animatePlayer(dt, moving, iLen) {
   const t = performance.now() / 1000;
+  P.stars.visible = player.stunT > 0 && !player.celebrate; // 眩晕星星
   if (player.celebrate) {
     P.visual.rotation.set(0, 0, 0);
     P.visual.scale.set(1, 1, 1);
@@ -1184,6 +1201,45 @@ function animatePlayer(dt, moving, iLen) {
   }
   P.root.rotation.y = player.yaw;
   if (player.landSquash > 0) player.landSquash = Math.max(0, player.landSquash - dt * 3.4);
+  if (player.stunT > 0) {
+    // —— 眩晕：空中后仰乱蹬划抛物线；落地后摇晃 + 星星绕头 ——
+    P.stars.rotation.y += dt * 4;
+    if (!player.grounded) {
+      P.visual.rotation.x = -0.55; P.visual.rotation.z = 0;
+      P.legL.rotation.x = Math.sin(t * 15) * 0.55 - 0.35;
+      P.legR.rotation.x = -Math.sin(t * 15) * 0.55 - 0.35;
+      P.footL.rotation.x = P.footR.rotation.x = 0.25;
+      P.armL.rotation.x = -1.7; P.armL.rotation.z = 2.2;
+      P.visual.position.y = 0; P.visual.scale.set(1, 1, 1);
+      P.torso.rotation.z = 0;
+      P.head.position.y = 1.78; P.head.rotation.set(0.18, 0, 0);
+    } else {
+      P.visual.rotation.x = 0.08;
+      P.visual.rotation.z = Math.sin(t * 8.5) * 0.13;
+      P.legL.rotation.x = P.legR.rotation.x = 0;
+      P.footL.rotation.x = P.footR.rotation.x = 0;
+      P.armL.rotation.x = -0.35; P.armL.rotation.z = 0.5 + Math.sin(t * 8.5) * 0.18;
+      P.visual.position.y = 0; P.visual.scale.set(1, 1, 1);
+      P.torso.rotation.z = 0;
+      P.head.position.y = 1.78;
+      P.head.rotation.set(0, Math.sin(t * 9.5) * 0.28, Math.sin(t * 11) * 0.2);
+    }
+    // 眩晕落地的滑稽大挤压
+    if (player.grounded && player.landSquash > 0) {
+      const q = player.landSquash;
+      P.visual.scale.y *= 1 - q * 1.5;
+      P.visual.scale.x *= 1 + q * 0.85;
+      P.visual.scale.z *= 1 + q * 0.7;
+      P.visual.position.y = -q * 0.18;
+    }
+    // 持枪手臂无力垂下
+    P.armR.rotation.x = 0.35; P.armR.rotation.z = 0;
+    P.gun.position.z = 0.5; P.gun.position.y = 0.1;
+    if (Models.gunHolder && Models.gunHolder.parent === P.armR) Models.gunHolder.position.z = 0.5;
+    const hf = player.hurtFlash > 0;
+    P.mats.forEach(m => { m.emissive.setHex(hf ? 0x881111 : 0x000000); });
+    return;
+  }
   const walking = moving && player.grounded;
   if (walking) {
     // —— 走路：胖嘟嘟招牌摇摆步（腿摆+脚尖跟随+身体摇摆+挤压弹跳）——
@@ -1259,6 +1315,7 @@ function animatePlayer(dt, moving, iLen) {
 function deathAnimPlayer(dt) {
   if (player.deadT === undefined) player.deadT = 0;
   player.deadT += dt;
+  P.stars.visible = false;
   const k = Math.min(1, player.deadT / 0.9);
   P.root.rotation.x = k * Math.PI / 2;
   P.root.position.y = -k * 0.3;
@@ -1348,7 +1405,7 @@ const frog = {
   pos: new THREE.Vector3(0, 0, -9),
   yaw: 0, hp: CONFIG.enemy.maxHp, phase: 1,
   state: 'normal', cast: null, flinch: 0,
-  cds: { ray: 1.5, cheese: 2.5, wave: 3 },
+  cds: { ray: 1.5, cheese: 2.5, wave: 3, repel: 4 },
   strafeDir: 1, strafeT: 0, walkPhase: 0,
   hitR: CONFIG.enemy.hitRadius[0], center: new THREE.Vector3(0, 1.05, -9),
   dead: false, stunT: 0, deathT: 0, blinkT: 2
@@ -1613,7 +1670,7 @@ function startTransform(n) {
   F.chargeOrb.visible = false;
   hideWaveRings();
   applyFrogPhase(n);
-  frog.cds = { ray: 1.2, cheese: 1.2, wave: 1.2 }; // 变身结束后技能很快恢复
+  frog.cds = { ray: 1.2, cheese: 1.2, wave: 1.2, repel: 2.5 }; // 变身结束后技能很快恢复
   Sfx.phase();
   Shake.add(0.5);
   Particles.spawn(frog.pos.x, 1.2, frog.pos.z, 32, { color: 0xffd76a, color2: 0xffffff, speed: 7, up: 3, life: 0.9, grav: 5 });
@@ -1664,7 +1721,7 @@ function animateFrog(dt, moving, mode) {
 function updateFrog(dt) {
   if (frog.dead) { deathAnimFrog(dt); F.root.position.x = frog.pos.x; F.root.position.z = frog.pos.z; return; }
   frog.center.set(frog.pos.x, CONFIG.enemy.hitHeight[frog.phase - 1] * frog.baseScale, frog.pos.z);
-  frog.cds.ray -= dt; frog.cds.cheese -= dt; frog.cds.wave -= dt;
+  frog.cds.ray -= dt; frog.cds.cheese -= dt; frog.cds.wave -= dt; frog.cds.repel -= dt;
   frog.flinch -= dt;
   frog.blinkT -= dt;
   if (frog.blinkT < 0) frog.blinkT = rand(2.4, 5);
@@ -1696,7 +1753,8 @@ function updateFrog(dt) {
   clampArena(frog.pos, 3.6); // 体型放大后多留身体半径，避免蹭穿围栏
   frog.walkPhase += Math.hypot(mx, mz) * dt * 2.4;
   // 技能触发（不再要求奶蛙背对玩家：任何朝向、任意相对位置均可施放）
-  if (frog.phase === 1 && dist <= sk.ray.range && frog.cds.ray <= 0) startCast('ray');
+  if (dist <= sk.repel.range && frog.cds.repel <= 0) startCast('repel'); // 被动·贴身弹飞：优先级最高，不分阶段
+  else if (frog.phase === 1 && dist <= sk.ray.range && frog.cds.ray <= 0) startCast('ray');
   else if (frog.phase === 2 && dist <= sk.cheese.range && frog.cds.cheese <= 0) startCast('cheese');
   else if (frog.phase === 3 && dist <= sk.wave.range && frog.cds.wave <= 0) startCast('wave');
   animateFrog(dt, Math.hypot(mx, mz) > 0.15, 'normal');
@@ -1754,11 +1812,18 @@ function startCast(type) {
     frog.cds.cheese = sk.cheese.duration + sk.cheese.cooldown;
     Sfx.cheeseSpawn();
     showSkillWarn('奶酪轰炸！躲开脚下预警圈！');
-  } else {
+  } else if (type === 'wave') {
     c.t = sk.wave.warn;
     frog.cds.wave = sk.wave.warn + sk.wave.cooldown;
     Sfx.laugh();
     showSkillWarn('奶蛙捧腹大笑 —— 白色声波扩散，快跳！');
+    F.waveRings[1].visible = true;
+    F.waveRings[1].scale.setScalar(1);
+  } else { // repel 被动·贴身弹飞
+    c.t = sk.repel.warn;
+    frog.cds.repel = sk.repel.warn + sk.repel.cooldown;
+    Sfx.repelWarn();
+    showSkillWarn('奶蛙恼羞成怒 —— 贴身弹飞！快闪开！');
     F.waveRings[1].visible = true;
     F.waveRings[1].scale.setScalar(1);
   }
@@ -1810,7 +1875,8 @@ function updateCast(dt) {
   if (!c) { endCast(); return; }
   if (c.type === 'ray') updateRayCast(c, dt);
   else if (c.type === 'cheese') updateCheeseCast(c, dt);
-  else updateWaveCast(c, dt);
+  else if (c.type === 'wave') updateWaveCast(c, dt);
+  else updateRepelCast(c, dt);
   F.root.position.copy(frog.pos);
   F.root.rotation.y = frog.yaw;
 }
@@ -1946,6 +2012,49 @@ function updateWaveCast(c, dt) {
     }
   }
   if (c.r > sk.wave.maxRadius) endCast();
+}
+
+function updateRepelCast(c, dt) {
+  // 被动·贴身弹飞：预警期以 720°/秒急速转身面向玩家（危险圈+蓄力发光），随后一次性弹飞+眩晕
+  _v1.copy(player.pos).sub(frog.pos); _v1.y = 0;
+  const dist = _v1.length();
+  if (dist > 0.001) _v1.divideScalar(dist);
+  if (c.phase === 'warn') {
+    c.t -= dt;
+    rotateFrogToward(Math.atan2(_v1.x, _v1.z), 720, dt); // 迅速转身
+    const pr = 1 - c.t / sk.repel.warn;
+    F.waveRings[1].visible = true;
+    F.waveRings[1].scale.setScalar(1 + pr * (sk.repel.range - 1)); // 危险圈扩张到弹飞半径
+    F.waveRings[1].material.opacity = 0.3 + pr * 0.5;
+    F.mats.forEach(m => m.emissive.setHex(0x7a4a1f)); // 蓄力发光
+    animateFrog(dt, false, 'laugh');
+    if (c.t <= 0) {
+      // 弹飞判定：瞬间仍在范围内且未跳跃闪避
+      const dd = Math.hypot(player.pos.x - frog.pos.x, player.pos.z - frog.pos.z);
+      if (dd <= sk.repel.range + 0.35 && !playerInvincible()) {
+        damagePlayer(sk.repel.damage, 'repel');
+        if (!player.dead) {
+          _v2.copy(player.pos).sub(frog.pos); _v2.y = 0;
+          if (_v2.lengthSq() > 0.001) _v2.normalize();
+          player.velXZ.addScaledVector(_v2, sk.repel.knockback / 0.5);
+          player.velY = sk.repel.knockUp;      // 抛上高空，抛物线升空再落地
+          player.grounded = false;
+          player.stunT = sk.repel.stun;        // 眩晕：操作失灵
+          player.invTimer = 0.8;               // 飞行途中免再受击
+          Popups.show('弹飞·眩晕!', _v3.copy(player.pos).setY(player.pos.y + 2.4), '#ffd24f');
+        }
+      }
+      Sfx.repelHit();
+      Shake.add(0.6);
+      game.fovKick = 1;
+      Particles.spawn(player.pos.x, 1.2, player.pos.z, 22, { color: 0xffe27a, color2: 0xffffff, speed: 7, up: 1.6, life: 0.55, grav: 4 });
+      Shockwaves.spawn(frog.pos.x, frog.pos.z, 0xffd24f, 5.5, 0.5);
+      F.waveRings[1].visible = false;
+      F.mats.forEach(m => m.emissive.setHex(0x000000));
+      endCast();
+    }
+    return;
+  }
 }
 
 /* ================= 奶酪雨 ================= */
@@ -2371,18 +2480,19 @@ function resetGame() {
   player.pos.set(0, 0, 11); player.velY = 0; player.velXZ.set(0, 0, 0);
   player.grounded = true; player.yaw = Math.PI; player.pitch = -0.06;
   player.hp = pc.maxHp; player.fireCd = 0; player.jumpCd = 0; player.jumpInv = 0; player.invTimer = 0;
-  player.hurtFlash = 0; player.knockTimer = 0;
+  player.hurtFlash = 0; player.knockTimer = 0; player.stunT = 0;
   player.dead = false; player.celebrate = false; player.deadT = 0;
   player.stats = { shots: 0, hits: 0, ricochets: 0, dmgTaken: 0 };
   P.root.rotation.set(0, player.yaw, 0);
   P.root.position.copy(player.pos);
   P.visual.position.y = 0;
   P.visual.scale.set(1, 1, 1); P.visual.rotation.set(0, 0, 0);
+  P.stars.visible = false;
   player.landSquash = 0; player.walkPhase = 0; player.gunRecoil = 0;
   frog.pos.set(0, 0, -9); frog.yaw = 0; frog.hp = ec.maxHp;
   frog.dead = false; frog.starsDone = false; frog.deathT = 0;
   frog.state = 'normal'; frog.cast = null; frog.flinch = 0; frog.blinkT = 2;
-  frog.cds = { ray: 1, cheese: 2, wave: 2.5 }; // 开局首施更早
+  frog.cds = { ray: 1, cheese: 2, wave: 2.5, repel: 3 }; // 开局首施更早（被动稍晚）
   frog.strafeT = 0; frog.strafeDir = 1;
   F.root.rotation.set(0, 0, 0);
   F.root.position.copy(frog.pos);
@@ -2455,6 +2565,8 @@ function warmupFirstShot() {
     F.chargeOrb.visible = true;
     const auraWas = F.aura.visible;
     F.aura.visible = true;
+    const starsWas = P.stars.visible;
+    P.stars.visible = true; // 预编译眩晕星星材质
     renderer.render(scene, camera); // 预编译渲染
     // —— 还原 ——
     P.flash.visible = false;
@@ -2462,6 +2574,7 @@ function warmupFirstShot() {
     hideBeam(); hideWaveRings();
     F.chargeOrb.visible = false;
     F.aura.visible = auraWas;
+    P.stars.visible = starsWas;
   } catch (e) { /* 预热失败不影响游戏 */ }
 }
 
