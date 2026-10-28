@@ -1953,10 +1953,14 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       const t = (y + 1) / 2;
-      // 梨形 + 微脖颈：头再收小、整头再上抬（含耳），顶部近水平微弯；颈处轻凹再深一点点且更顺滑（不过度）
+      // 梨形 + 微脖颈：头再收小一圈（冠部加收）、整头再上抬（含耳）；冠部软限幅压平头顶（近水平微弯）；颈处轻凹顺滑内收（不过度）
       const u = Math.max(0.001, (t - 0.05) / 0.95);
-      const k = 0.98 - 0.50 * Math.pow(u, 1.5) - 0.052 * Math.exp(-Math.pow((t - 0.72) / 0.06, 2)) + 0.04 * Math.exp(-Math.pow((t - 0.82) / 0.14, 2));
-      const ny = y + 0.09 * Math.exp(-Math.pow((y + 1) / 0.26, 2)) - 0.15 * Math.exp(-Math.pow((y - 1) / 0.24, 2)) + 0.12 * Math.exp(-Math.pow((t - 0.95) / 0.18, 2)); // 底部微平 + 顶部压平微弯 + 头部上抬
+      const k = 0.98 - 0.54 * Math.pow(u, 1.5) - 0.05 * Math.exp(-Math.pow((t - 0.96) / 0.09, 2)) - 0.058 * Math.exp(-Math.pow((t - 0.72) / 0.065, 2)) + 0.04 * Math.exp(-Math.pow((t - 0.82) / 0.14, 2));
+      let ny = y + 0.09 * Math.exp(-Math.pow((y + 1) / 0.26, 2)) - 0.15 * Math.exp(-Math.pow((y - 1) / 0.24, 2)) + 0.15 * Math.exp(-Math.pow((t - 0.95) / 0.18, 2));
+      if (ny > 0.90) { // 冠部平滑软限幅（s/(1+1.8s) 饱和）：压平头顶、近水平微弯，且无折痕
+        const s = (ny - 0.90) / 0.10;
+        ny = 0.90 + 0.10 * (s / (1 + 1.8 * s));
+      }
       pos.setXYZ(i, x * k, ny, z * k);
     }
     mouseBodyGeo.computeVertexNormals();
@@ -1968,7 +1972,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   // 大圆耳：缩小后再左右分开（对称，不与头顶相触）并跟随头位抬高
   [[-0.46, 0.34], [0.46, -0.34]].forEach(([ex, tilts], idx) => {
     const ear = new THREE.Group();
-    ear.position.set(ex, 2.02, -0.03);
+    ear.position.set(ex, 2.06, -0.03);
     ear.rotation.z = tilts;      // 向外略斜（左右对称）
     ear.rotation.x = -0.12;      // 稍向后仰
     const outer = mesh(new THREE.SphereGeometry(0.34, 18, 14), mMouseBody, 0, 0, 0);
@@ -1981,20 +1985,47 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   // 眼睛：浅黄绿虹膜圈 + 大黑瞳 + 高光（原尺寸 2/3，深嵌头部曲面）
   F.mouseEyes = []; F.mousePupils = [];
-  [[-0.22], [0.22]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.09, 14, 12), mIrisG, ex, 1.70, 0.43);
+  [[-0.20], [0.20]].forEach(([ex]) => {
+    const eye = mesh(new THREE.SphereGeometry(0.082, 14, 12), mIrisG, ex, 1.74, 0.40);
     eye.rotation.set(-0.32, ex > 0 ? 0.20 : -0.20, 0); // 微斜嵌入：眼轴沿脸面法向外上倾，深埋不突出
-    const pu = mesh(new THREE.SphereGeometry(0.065, 10, 8), mPup, Math.sign(ex) * 0.016, -0.018, 0.045); // 瞳孔外下偏置：视线看向正斜下方
-    pu.add(mesh(new THREE.SphereGeometry(0.014, 6, 6), mGlint, -0.014, 0.018, 0.03));
+    const pu = mesh(new THREE.SphereGeometry(0.055, 10, 8), mPup, Math.sign(ex) * 0.014, -0.016, 0.040); // 瞳孔外下偏置：视线看向正斜下方
+    pu.add(mesh(new THREE.SphereGeometry(0.012, 6, 6), mGlint, -0.012, 0.016, 0.024));
     eye.add(pu);
     mb.add(eye);
     F.mouseEyes.push(eye);
     F.mousePupils.push(pu);
   });
-  // 嘴：细微笑弧延长至与瞳孔间距等宽、再上抬贴近眼睛；整体前移补齐中间被脸面吞掉的弧线（弧角 0.55π、z 转 1.225π 对称）
-  F.mouseMouth = mesh(new THREE.TorusGeometry(0.30, 0.016, 6, 18, Math.PI * 0.55), mMouth, 0, 1.72, 0.58);
-  F.mouseMouth.rotation.set(-0.3, 0, Math.PI * 1.225);
-  mb.add(F.mouseMouth);
+  // 嘴：微笑弧管——沿变形躯干前表面逐点采样生成，完全贴合脸面（不穿模不悬浮）；宽度与瞳距等比
+  {
+    const smileR = 0.275, mouthYc = 1.765, tubeR = 0.016, lift0 = 0.015;
+    const surfZ = (X, Y) => { // 反解躯干前表面 z（与上方变形公式一致，含冠部收窄与软限幅）
+      const target = (Y - 1.04) / 0.96;
+      let lo = -1, hi = 1;
+      for (let it = 0; it < 32; it++) {
+        const mid = (lo + hi) / 2, tt = (mid + 1) / 2;
+        let v = mid + 0.09 * Math.exp(-Math.pow((mid + 1) / 0.26, 2)) - 0.15 * Math.exp(-Math.pow((mid - 1) / 0.24, 2)) + 0.15 * Math.exp(-Math.pow((tt - 0.95) / 0.18, 2));
+        if (v > 0.90) { const s2 = (v - 0.90) / 0.10; v = 0.90 + 0.10 * (s2 / (1 + 1.8 * s2)); }
+        if (v < target) lo = mid; else hi = mid;
+      }
+      const y0 = (lo + hi) / 2, tt = (y0 + 1) / 2;
+      const uu = Math.max(0.001, (tt - 0.05) / 0.95);
+      const kk = 0.98 - 0.54 * Math.pow(uu, 1.5) - 0.05 * Math.exp(-Math.pow((tt - 0.96) / 0.09, 2)) - 0.058 * Math.exp(-Math.pow((tt - 0.72) / 0.065, 2)) + 0.04 * Math.exp(-Math.pow((tt - 0.82) / 0.14, 2));
+      const x0 = X / (kk * 0.94), z2 = 1 - x0 * x0 - y0 * y0;
+      return z2 > 0 ? Math.sqrt(z2) * kk * 1.02 : 0;
+    };
+    const pivotZ = surfZ(0, mouthYc) + lift0;
+    const pts = [];
+    for (let i = 0; i <= 24; i++) {
+      const phi = -Math.PI * 0.275 + Math.PI * 0.55 * (i / 24);
+      const ax = smileR * Math.sin(phi), ay = mouthYc - smileR * Math.cos(phi);
+      pts.push(new THREE.Vector3(ax, ay - mouthYc, surfZ(ax, ay) + lift0 - pivotZ));
+    }
+    const mpivot = new THREE.Group(); // pivot：施法张嘴 scale 围绕弧中心进行
+    mpivot.position.set(0, mouthYc, pivotZ);
+    mpivot.add(mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 28, tubeR, 6, false), mMouth, 0, 0, 0));
+    F.mouseMouth = mpivot;
+    mb.add(F.mouseMouth);
+  }
   // 手臂：圆台（肩粗掌细渐变柱）拼接圆润圆掌（参考图手套状无分指）
   F.mouseArms = [];
   [['armL', -0.58, -2.35], ['armR', 0.66, 0.35]].forEach(([key, ax, az0], ai) => {
@@ -2591,8 +2622,8 @@ function animateMouseBody(t, moving, mode) {
     const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / dLen;
     const px = clamp(side, -1, 1) * 0.09;
     // 瞳孔外下偏置 + 玩家横向追踪：视线看向正斜下方
-    F.mousePupils[0].position.set(px - 0.016, -0.018, 0.045);
-    F.mousePupils[1].position.set(px + 0.016, -0.018, 0.045);
+    F.mousePupils[0].position.set(px - 0.014, -0.016, 0.040);
+    F.mousePupils[1].position.set(px + 0.014, -0.016, 0.040);
   }
   // 尾巴独立摆动：走快 / 站慢
   const tSpeed = moving ? t * 9 : t * 3.2;
