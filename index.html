@@ -1940,7 +1940,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.eggHide = [belly, armL, armR].concat(F.legs, F.backSpots);
   /* —— 奶鼠（二阶段专属模型，参考图 P2）：黄皮大耳小老鼠，root 内独立组 —— */
   const mMouseBody = std(0xffdd70), mEarIn = std(0xffc178), mMouseSpot = std(0xd2b250);
-  F.mats.push(mMouseBody, mEarIn, mMouseSpot); // 红闪 emissive 同步（mMouseIris 已弃用：奶鼠眼改用奶蛋同款深绿 mIrisG）
+  const mIrisL = std(0xa4d962, { roughness: 0.38 }); // 浅绿色虹膜（奶鼠专属）
+  F.mats.push(mMouseBody, mEarIn, mMouseSpot, mIrisL); // 红闪 emissive 同步
   const mmouse = new THREE.Group();
   F.mouse = mmouse;
   root.add(mmouse);
@@ -1985,8 +1986,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   // 眼睛：浅黄绿虹膜圈 + 大黑瞳 + 高光（原尺寸 2/3，深嵌头部曲面）
   F.mouseEyes = []; F.mousePupils = [];
-  [[-0.20], [0.20]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.082, 14, 12), mIrisG, ex, 1.74, 0.40);
+  [[-0.22], [0.22]].forEach(([ex]) => {
+    const eye = mesh(new THREE.SphereGeometry(0.082, 14, 12), mIrisL, ex, 1.74, 0.37);
     eye.rotation.set(-0.32, ex > 0 ? 0.20 : -0.20, 0); // 微斜嵌入：眼轴沿脸面法向外上倾，深埋不突出
     const pu = mesh(new THREE.SphereGeometry(0.055, 10, 8), mPup, Math.sign(ex) * 0.014, -0.016, 0.040); // 瞳孔外下偏置：视线看向正斜下方
     pu.add(mesh(new THREE.SphereGeometry(0.012, 6, 6), mGlint, -0.012, 0.016, 0.024));
@@ -1995,9 +1996,10 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     F.mouseEyes.push(eye);
     F.mousePupils.push(pu);
   });
-  // 嘴：微笑弧管——沿变形躯干前表面逐点采样生成，完全贴合脸面（不穿模不悬浮）；宽度与瞳距等比
+  // 嘴：微笑弧管——沿变形躯干前表面逐点采样生成，完全贴合脸面（不穿模不悬浮）；弧度更平直、宽度与瞳距相当
   {
-    const smileR = 0.275, mouthYc = 1.765, tubeR = 0.016, lift0 = 0.015;
+    const smileArc = Math.PI * 0.38, smileR = 0.427, cornerY = 1.60, tubeR = 0.016, lift0 = 0.015;
+    const mouthYc = cornerY + smileR * Math.cos(smileArc / 2); // 弧圆心（嘴角高度 = cornerY）
     const surfZ = (X, Y) => { // 反解躯干前表面 z（与上方变形公式一致，含冠部收窄与软限幅）
       const target = (Y - 1.04) / 0.96;
       let lo = -1, hi = 1;
@@ -2013,15 +2015,15 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
       const x0 = X / (kk * 0.94), z2 = 1 - x0 * x0 - y0 * y0;
       return z2 > 0 ? Math.sqrt(z2) * kk * 1.02 : 0;
     };
-    const pivotZ = surfZ(0, mouthYc) + lift0;
+    const pivotZ = surfZ(0, cornerY) + lift0;
     const pts = [];
     for (let i = 0; i <= 24; i++) {
-      const phi = -Math.PI * 0.275 + Math.PI * 0.55 * (i / 24);
+      const phi = -smileArc / 2 + smileArc * (i / 24);
       const ax = smileR * Math.sin(phi), ay = mouthYc - smileR * Math.cos(phi);
-      pts.push(new THREE.Vector3(ax, ay - mouthYc, surfZ(ax, ay) + lift0 - pivotZ));
+      pts.push(new THREE.Vector3(ax, ay - cornerY, surfZ(ax, ay) + lift0 - pivotZ));
     }
-    const mpivot = new THREE.Group(); // pivot：施法张嘴 scale 围绕弧中心进行
-    mpivot.position.set(0, mouthYc, pivotZ);
+    const mpivot = new THREE.Group(); // pivot 在嘴角高度：施法张嘴 scale 就地加深
+    mpivot.position.set(0, cornerY, pivotZ);
     mpivot.add(mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 28, tubeR, 6, false), mMouth, 0, 0, 0));
     F.mouseMouth = mpivot;
     mb.add(F.mouseMouth);
