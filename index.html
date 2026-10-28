@@ -1984,7 +1984,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   [[-0.22], [0.22]].forEach(([ex]) => {
     const eye = mesh(new THREE.SphereGeometry(0.09, 14, 12), mIrisG, ex, 1.70, 0.43);
     eye.rotation.set(-0.32, ex > 0 ? 0.20 : -0.20, 0); // 微斜嵌入：眼轴沿脸面法向外上倾，深埋不突出
-    const pu = mesh(new THREE.SphereGeometry(0.065, 10, 8), mPup, 0, 0.003, 0.045);
+    const pu = mesh(new THREE.SphereGeometry(0.065, 10, 8), mPup, Math.sign(ex) * 0.016, -0.018, 0.045); // 瞳孔外下偏置：视线看向正斜下方
     pu.add(mesh(new THREE.SphereGeometry(0.014, 6, 6), mGlint, -0.014, 0.018, 0.03));
     eye.add(pu);
     mb.add(eye);
@@ -2590,8 +2590,9 @@ function animateMouseBody(t, moving, mode) {
     const dLen = _v1.length() || 1;
     const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / dLen;
     const px = clamp(side, -1, 1) * 0.09;
-    F.mousePupils[0].position.set(px, 0.003, 0.045);
-    F.mousePupils[1].position.set(px, 0.003, 0.045);
+    // 瞳孔外下偏置 + 玩家横向追踪：视线看向正斜下方
+    F.mousePupils[0].position.set(px - 0.016, -0.018, 0.045);
+    F.mousePupils[1].position.set(px + 0.016, -0.018, 0.045);
   }
   // 尾巴独立摆动：走快 / 站慢
   const tSpeed = moving ? t * 9 : t * 3.2;
