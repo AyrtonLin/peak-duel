@@ -146,7 +146,7 @@ body.touch.portrait #rotateHint { display: block; }
 <div id="crosshair"><span class="tick u"></span><span class="tick d"></span><span class="tick2 l"></span><span class="tick2 r"></span><span class="dot"></span></div>
 <div id="hud">
   <div class="panel" id="plPanel"><img id="plImg" alt=""><div class="pcol"><div class="pname"><span>肥嘟嘟</span></div><div class="bar"><div class="fill" id="plFill"></div></div><div class="hpTxt" id="plTxt">100 / 100</div></div></div>
-  <div class="panel" id="enPanel"><img id="enImg" alt=""><div class="pcol"><div class="pname"><span>奶蛙</span><span id="phaseTag">一阶段</span></div><div class="bar"><div class="fill" id="enFill"></div></div><div class="hpTxt" id="enTxt">100 / 100</div></div></div>
+  <div class="panel" id="enPanel"><img id="enImg" alt=""><div class="pcol"><div class="pname"><span id="enName">奶蛙</span><span id="phaseTag">一阶段</span></div><div class="bar"><div class="fill" id="enFill"></div></div><div class="hpTxt" id="enTxt">100 / 100</div></div></div>
   <div id="skillWarn"></div>
   <div id="centerMsg"></div>
   <div id="cdRow">
@@ -165,9 +165,9 @@ body.touch.portrait #rotateHint { display: block; }
   <div class="cards">
     <div class="card"><img class="cardImg" data-key="P4" alt=""><div>肥嘟嘟（你）</div></div>
     <div class="card"><img class="cardImg" data-key="P5" alt=""><div>你的武器</div></div>
-    <div class="card"><img class="cardImg" data-key="P1" alt=""><div>奶蛙·一阶</div></div>
-    <div class="card"><img class="cardImg" data-key="P2" alt=""><div>奶蛙·二阶</div></div>
-    <div class="card"><img class="cardImg" data-key="P3" alt=""><div>奶蛙·三阶</div></div>
+    <div class="card"><img class="cardImg" data-key="P1" alt=""><div>奶蛋·一阶</div></div>
+    <div class="card"><img class="cardImg" data-key="P2" alt=""><div>奶鼠·二阶</div></div>
+    <div class="card"><img class="cardImg" data-key="P3" alt=""><div>奶斯拉·三阶</div></div>
   </div>
   <div class="controls">
     <b>WASD</b> 移动 &nbsp;·&nbsp; <b>鼠标</b> 转视角 &nbsp;·&nbsp; <b>左键(按住)</b> 开火 &nbsp;·&nbsp; <b>中键/Q键(点击)</b> 切换视角锁定奶蛙 &nbsp;·&nbsp; <b>空格</b> 袋鼠跳（起跳后 0.4 秒无敌免控！）<br>
@@ -1920,7 +1920,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   body.add(F.mouth);
   F.mouthAnchor = new THREE.Object3D();
   F.mouthAnchor.position.set(0, 1.3, 1.05); // 嘴外前方：光束起点不被躯干/喙包裁剪
-  body.add(F.mouthAnchor);
+  root.add(F.mouthAnchor); // 挂 root：蛋/奶鼠双模型共享锚点（随阶段改位）
   // 小手臂
   const armGeo = new THREE.CapsuleGeometry(0.11, 0.3, 4, 8);
   const armL = mesh(armGeo, mBody, -0.95, 0.75, 0.25), armR = mesh(armGeo, mBody, 0.95, 0.75, 0.25);
@@ -1938,6 +1938,131 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   // 一阶奶蛋：蛋无四肢、无腹部色块、背部光滑（进化后才长出蛙四肢与背斑）
   F.eggHide = [belly, armL, armR].concat(F.legs, F.backSpots);
+  /* —— 奶鼠（二阶段专属模型，参考图 P2）：黄皮大耳小老鼠，root 内独立组 —— */
+  const mMouseBody = std(0xffdd70), mEarIn = std(0xffc178), mMouseSpot = std(0xd2b250);
+  F.mats.push(mMouseBody, mEarIn, mMouseSpot); // 红闪 emissive 同步（索引 8/9/10）
+  const mmouse = new THREE.Group();
+  F.mouse = mmouse;
+  root.add(mmouse);
+  const mb = new THREE.Group(); // 姿态组：呼吸/摆动整体作用
+  mmouse.add(mb);
+  // 梨形躯干：上窄下宽、头身自然过渡（球体顶点变形，圆润收顶不尖）
+  const mouseBodyGeo = new THREE.SphereGeometry(1, 26, 22);
+  {
+    const pos = mouseBodyGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const t = (y + 1) / 2;
+      const k = 1.0 - 0.36 * Math.pow(Math.max(0.001, (t - 0.04) / 0.96), 1.15); // 底宽上圆
+      const ny = y + 0.09 * Math.exp(-Math.pow((y + 1) / 0.26, 2)); // 底部微平
+      pos.setXYZ(i, x * k, ny, z * k);
+    }
+    mouseBodyGeo.computeVertexNormals();
+  }
+  const mTorso = new THREE.Mesh(mouseBodyGeo, mMouseBody);
+  mTorso.position.set(0, 1.04, 0);
+  mTorso.scale.set(0.94, 0.96, 1.02);
+  mb.add(mTorso);
+  // 大圆耳：外侧黄色厚盘 + 内侧浅橙凹耳（前后错层实现凹陷感）
+  [[-0.58, 0.32], [0.58, -0.32]].forEach(([ex, tilts], idx) => {
+    const ear = new THREE.Group();
+    ear.position.set(ex, 1.86, -0.03);
+    ear.rotation.z = tilts;      // 向外略斜
+    ear.rotation.x = -0.12;      // 稍向后仰
+    const outer = mesh(new THREE.SphereGeometry(0.52, 18, 14), mMouseBody, 0, 0, 0);
+    outer.scale.set(0.95, 1, 0.2);
+    const inner = mesh(new THREE.SphereGeometry(0.4, 16, 12), mEarIn, 0, 0, 0.075);
+    inner.scale.set(0.95, 1, 0.13);
+    ear.add(outer, inner);
+    mb.add(ear);
+    if (idx === 0) F.mouseEarL = ear; else F.mouseEarR = ear;
+  });
+  // 眼睛：绿虹膜 + 黑瞳 + 高光，略突出面颊（S 形面颊上）
+  F.mouseEyes = []; F.mousePupils = [];
+  [[-0.21], [0.21]].forEach(([ex]) => {
+    const eye = mesh(new THREE.SphereGeometry(0.16, 14, 12), mIrisG, ex, 1.6, 0.8);
+    const pu = mesh(new THREE.SphereGeometry(0.11, 10, 8), mPup, 0, 0.01, 0.1);
+    pu.add(mesh(new THREE.SphereGeometry(0.03, 6, 6), mGlint, -0.028, 0.038, 0.085));
+    eye.add(pu);
+    mb.add(eye);
+    F.mouseEyes.push(eye);
+    F.mousePupils.push(pu);
+  });
+  // 嘴：小巧细长微笑弧（深棕细线，贴面颊前倾）
+  F.mouseMouth = mesh(new THREE.TorusGeometry(0.15, 0.026, 6, 14, Math.PI * 0.75), mMouth, 0, 1.38, 0.9);
+  F.mouseMouth.rotation.set(-0.3, 0, Math.PI + 0.16);
+  mb.add(F.mouseMouth);
+  // 手臂：短圆柱腕 + 掌 + 指凸（左手奉天挥手姿势，右手自然下垂）
+  F.mouseArms = [];
+  [['armL', -0.66, 2.25], ['armR', 0.66, -0.3]].forEach(([key, ax, az0], ai) => {
+    const arm = new THREE.Group();
+    arm.position.set(ax, 1.36, 0.14);
+    arm.rotation.z = az0;
+    const limb = mesh(new THREE.CapsuleGeometry(0.125, 0.3, 4, 10), mMouseBody, 0, -0.17, 0);
+    arm.add(limb);
+    // 手掌（厚扁球）+ 两根小指凸
+    const palm = mesh(new THREE.SphereGeometry(0.16, 10, 8), mMouseBody, 0, -0.38, 0);
+    palm.scale.set(1, 1.2, 0.6);
+    arm.add(palm);
+    const f1 = mesh(new THREE.CapsuleGeometry(0.045, 0.12, 3, 8), mMouseBody, -0.07, -0.52, 0);
+    f1.rotation.z = -0.35;
+    const f2 = mesh(new THREE.CapsuleGeometry(0.045, 0.12, 3, 8), mMouseBody, 0.07, -0.52, 0);
+    f2.rotation.z = 0.35;
+    arm.add(f1, f2);
+    arm.userData.baseZ = az0;
+    F.mouseArms.push(arm);
+    mb.add(arm);
+  });
+  // 腿：短圆柱 + 宽厚脚（脚掌扁球压平，稳定落地）
+  F.mouseLegs = [];
+  [[-0.36], [0.36]].forEach(([lx]) => {
+    const leg = new THREE.Group();
+    leg.position.set(lx, 0.42, 0.1);
+    const limb = mesh(new THREE.CapsuleGeometry(0.155, 0.2, 4, 10), mMouseBody, 0, -0.12, 0);
+    leg.add(limb);
+    const foot = mesh(new THREE.SphereGeometry(0.26, 12, 10), mMouseBody, 0, -0.3, 0.14);
+    foot.scale.set(1, 0.42, 1.25);
+    foot.position.y = -0.28;
+    leg.add(foot);
+    F.mouseLegs.push(leg);
+    mb.add(leg);
+  });
+  // 尾巴：CatmullRomCurve3 + TubeGeometry（根部粗末细，末端上翘，pivot 在尾根可摆动）
+  const tailPivot = new THREE.Group();
+  tailPivot.position.set(0, 0.62, -0.82);
+  const tailPts = [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0.1, -0.2, -0.5),
+    new THREE.Vector3(0.42, -0.26, -0.82),
+    new THREE.Vector3(0.85, -0.08, -0.86)
+  ];
+  const tailCurve = new THREE.CatmullRomCurve3(tailPts);
+  const tailGeo = new THREE.TubeGeometry(tailCurve, 26, 0.075, 8, false);
+  { // 管径按弧长渐细：逐环向曲线中心收缩
+    const pos = tailGeo.attributes.position;
+    const seg = 26, radial = 8;
+    for (let idx = 0; idx < pos.count; idx++) {
+      const s = Math.floor(idx / (radial + 1));
+      const u = s / seg;
+      const c = tailCurve.getPointAt(u);
+      const fac = 1 - 0.6 * u; // 根粗尾细
+      pos.setXYZ(idx, c.x + (pos.getX(idx) - c.x) * fac, c.y + (pos.getY(idx) - c.y) * fac, c.z + (pos.getZ(idx) - c.z) * fac);
+    }
+    tailGeo.computeVertexNormals();
+  }
+  F.mouseTailPivot = tailPivot;
+  tailPivot.add(new THREE.Mesh(tailGeo, mMouseBody));
+  mb.add(tailPivot);
+  // 背部斑凸（奶鼠保留背部无敌提示）
+  F.mouseSpots = [];
+  [[-0.4, 1.25, -0.98], [0.35, 1.38, -0.88], [0, 1.05, -1.04]].forEach(p => {
+    const sp = mesh(new THREE.SphereGeometry(0.15, 8, 6), mMouseSpot, p[0], p[1], p[2]);
+    sp.scale.set(1, 0.5, 0.55);
+    mb.add(sp);
+    F.mouseSpots.push(sp);
+  });
+  F.mouseParts = [mmouse];
+  mmouse.visible = false;
   // 二阶段：奶酪皇冠
   F.crown = new THREE.Group();
   const cheeseMat = std(0xffd54f, { roughness: 0.6 });
@@ -1965,7 +2090,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.chargeOrb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
   F.chargeOrb.position.set(0, 1.3, 1.14); // 蓄力光球悬在嘴前
   F.chargeOrb.visible = false;
-  body.add(F.chargeOrb);
+  root.add(F.chargeOrb); // 挂 root：蛋/奶鼠双模型共享
   // 射线光束：亮核 + 主束 + 外辉 + 两级滞后拖尾（弯曲轨迹）
   F.beamCore = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
   F.beam = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xf0f8ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -1994,9 +2119,10 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   root.position.copy(frog.pos);
   scene.add(root);
 })();
-// 程序化占位部件清单（GLB 模型加载后隐藏）
-F.procParts = F.body.children.filter(c => c !== F.mouthAnchor && c !== F.chargeOrb);
+// 程序化占位部件清单（蛋体件；GLB 模型加载后隐藏；奶鼠走 F.mouse 独立门控）
+F.procParts = F.body.children.slice();
 
+const FROG_NAMES = ['奶蛋', '奶鼠', '奶斯拉']; // 三阶段模型命名
 const FROG_PHASE_LOOK = [
   { body: 0xeed98f, spot: 0xdcc377, scale: 2.55 },
   { body: 0xe5c859, spot: 0xcfa94e, scale: 2.91 },
@@ -2011,14 +2137,27 @@ function applyFrogPhase(n) {
   frog.hitR = CONFIG.enemy.hitRadius[n - 1];
   frog.phase = n;
   // 该阶段有 GLB 模型则隐藏程序化占位部件，否则用占位模型
-  // 一阶奶蛋：蛋无四肢（隐藏腹色块与蛙四肢），二阶起进化出四肢
+  // 三模型分层：一阶奶蛋（蛋体·无四肢）／二阶奶鼠（黄色大耳小老鼠）／三阶奶斯拉（白胖蛋＋四肢＋光环）
   const hasGlb = !!(Models.frogHolders && Models.frogHolders[n - 1]);
-  F.procParts.forEach(p => { p.visible = !hasGlb && !(n === 1 && F.eggHide.indexOf(p) >= 0); });
+  if (n === 2) {
+    F.mouse.visible = !hasGlb;   // 二阶换装奶鼠
+    F.procParts.forEach(p => { p.visible = false; }); // 蛋体整套隐藏
+    F.crown.position.set(0, 1.99, 0.06); // 皇冠改坐奶鼠头顶
+  } else {
+    F.mouse.visible = false;
+    F.procParts.forEach(p => { p.visible = !hasGlb && !(n === 1 && F.eggHide.indexOf(p) >= 0); });
+    F.crown.position.set(0, 2.06, 0.1);
+  }
   F.crown.visible = !hasGlb && n >= 2;
   F.brows.forEach(b => { b.visible = !hasGlb && n >= 3; });
   F.aura.visible = !hasGlb && n >= 3;
   Models.frogHolders.forEach((h, i) => { if (h) h.visible = (i === n - 1); });
   if (n === 3) F.pupils.forEach(p => { p.material = std(0xffc23a, { emissive: 0xcc7700 }); });
+  // 嘴前锚点/蓄力球随当前模型面部高度（root 坐标）
+  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : 1.3, n === 2 ? 0.95 : 1.05);
+  F.chargeOrb.position.set(0, n === 2 ? 1.56 : 1.3, n === 2 ? 1.02 : 1.14);
+  dom.enName.textContent = FROG_NAMES[n - 1];
+  dom.phaseTag.textContent = ['一阶段', '二阶段', '三阶段'][n - 1];
   dom.enImg.src = IMG['P' + n];
 }
 
@@ -2102,7 +2241,7 @@ const Models = {
       F.body.add(holder);
       applyFrogPhase(frog.phase);
     }
-    const names = { P1: '奶蛙一阶', P2: '奶蛙二阶', P3: '奶蛙三阶', P4: '肥嘟嘟', P5: '武器' };
+    const names = { P1: '奶蛋一阶', P2: '奶鼠二阶', P3: '奶斯拉三阶', P4: '肥嘟嘟', P5: '武器' };
     setModelStatus('<span class="ok">已加载 ' + names[key] + '（' + key + '.glb）</span>' + this.summary());
   },
   summary() {
@@ -2150,7 +2289,7 @@ function startTransform(n) {
   Sfx.phase();
   Shake.add(0.5);
   Particles.spawn(frog.pos.x, 1.2, frog.pos.z, 32, { color: 0xffd76a, color2: 0xffffff, speed: 7, up: 3, life: 0.9, grav: 5 });
-  centerMsg(n === 2 ? '奶蛙进入二阶段 · 奶酪轰炸！' : '奶蛙进入三阶段 · 捧腹大笑！');
+  centerMsg(n === 2 ? '奶蛙进化为奶鼠 · 奶酪轰炸！' : '奶鼠进化为奶斯拉 · 捧腹大笑！');
   showSkillWarn(n === 2 ? '注意脚下预警圈，袋鼠跳可躲奶酪！' : '声波震击不分方位 —— 波纹扩散时快跳！');
 }
 function deathAnimFrog(dt) {
@@ -2169,6 +2308,7 @@ function deathAnimFrog(dt) {
 }
 function animateFrog(dt, moving, mode) {
   const t = performance.now() / 1000;
+  if (frog.phase === 2) { animateMouseBody(t, moving, mode); return; } // 二阶奶鼠独立动画
   if (mode === 'laugh') {
     const b = Math.abs(Math.sin(t * 9));
     F.body.scale.set(1.12, 0.88 + b * 0.12, 1.12);
@@ -2236,6 +2376,75 @@ function animateFrog(dt, moving, mode) {
   F.pupils[1].position.set(px, 0, 0.045);
   F.mats.forEach(m => m.emissive.setHex(frog.flinch > 0 ? 0x5a4010 : 0x000000));
 }
+function animateMouseBody(t, moving, mode) {
+  const B = F.mouseParts[0].children[0]; // 姿态组 mb
+  if (mode === 'laugh') {
+    const b = Math.abs(Math.sin(t * 9));
+    B.scale.set(1.1, 0.9 + b * 0.1, 1.1);
+    B.position.y = b * 0.24;
+    B.rotation.z = Math.sin(t * 9) * 0.06;
+    B.rotation.x = 0;
+    F.mouseArms[0].rotation.set(Math.sin(t * 9) * 0.5, 0, 2.25 + Math.sin(t * 9) * 0.3);
+    F.mouseArms[1].rotation.set(Math.sin(t * 9) * 0.5, 0, -2.2 - Math.sin(t * 9) * 0.3);
+    F.mouseMouth.scale.set(1.3, 1.5, 1.05);
+    F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
+  } else if (mode === 'castRay') {
+    F.mouseArms[0].rotation.set(-0.5, 0, 2.25);
+    F.mouseArms[1].rotation.set(-0.5, 0, -2.0);
+    B.scale.set(1.05, 1 + Math.sin(t * 6) * 0.03, 1.05);
+    B.position.y = 0.05;
+    B.rotation.z = 0;
+    B.rotation.x = -0.07; // 后仰蓄力
+    F.mouseMouth.scale.set(1.15, 1.3, 1.1);
+    F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
+  } else if (mode === 'repel') {
+    F.mouseArms[0].rotation.set(-1.1, 0, 1.4);
+    F.mouseArms[1].rotation.set(-1.1, 0, -1.4);
+    B.scale.set(1.1, 0.95, 1.12);
+    B.position.y = 0.03 + Math.sin(t * 16) * 0.03;
+    B.rotation.z = 0;
+    B.rotation.x = 0.1; // 前倾压向玩家
+    F.mouseMouth.scale.set(1.2, 1.35, 1.1);
+    F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
+  } else if (mode === 'castCheese') {
+    F.mouseArms[0].rotation.set(Math.sin(t * 5) * 0.3, 0, 2.5);
+    F.mouseArms[1].rotation.set(Math.sin(t * 5) * 0.3, 0, -2.5);
+    B.scale.set(1 + Math.sin(t * 5) * 0.04, 1 + Math.sin(t * 5) * 0.05, 1);
+    B.position.y = Math.abs(Math.sin(t * 5)) * 0.16;
+    B.rotation.z = 0;
+    B.rotation.x = 0;
+    F.mouseMouth.scale.set(1.1, 1.3, 1); // 投掷张嘴
+    F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
+  } else {
+    // —— 常规：呼吸起伏 + 挥手待机/走路划腿 + 瞳孔追踪 ——
+    const wave = mode === 'idle' ? 1 : 0; // 保留：菜单即 idle
+    F.mouseArms[0].rotation.set(Math.sin(t * 3.1) * 0.16, 0, 2.25 + Math.sin(t * 3.1) * 0.14); // 左手常挥
+    F.mouseArms[1].rotation.set(Math.sin(t * 2.2) * 0.12 + (moving ? Math.sin(t * 7) * 0.25 : 0), 0, -0.3 - (moving ? Math.sin(t * 7) * 0.2 : 0));
+    F.mouseMouth.scale.set(1, 1, 1);
+    const br = Math.sin(t * (moving ? 7 : 2.4)) * (moving ? 0.06 : 0.03);
+    B.scale.set(1 - br * 0.6, 1 + br, 1 - br * 0.6);
+    B.position.y = moving ? Math.abs(Math.sin(frog.walkPhase)) * 0.11 : 0;
+    B.rotation.z = moving ? Math.sin(frog.walkPhase) * 0.07 : 0;
+    B.rotation.x = frog.flinch > 0 ? -0.22 * (frog.flinch / 0.25) : 0;
+    const ls = moving ? Math.sin(frog.walkPhase) * 0.5 : Math.sin(t * 2.4) * 0.06;
+    F.mouseLegs[0].rotation.x = ls;
+    F.mouseLegs[1].rotation.x = -ls;
+    // 瞳孔追踪（与蛋体同公式）
+    _v1.copy(player.pos).sub(frog.pos); _v1.y = 0;
+    const dLen = _v1.length() || 1;
+    const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / dLen;
+    const px = clamp(side, -1, 1) * 0.09;
+    F.mousePupils[0].position.set(px, 0.01, 0.1);
+    F.mousePupils[1].position.set(px, 0.01, 0.1);
+  }
+  // 尾巴独立摆动：走快 / 站慢
+  const tSpeed = moving ? t * 9 : t * 3.2;
+  F.mouseTailPivot.rotation.y = Math.sin(tSpeed) * (moving ? 0.3 : 0.18);
+  F.mouseTailPivot.rotation.x = Math.sin(tSpeed * 0.6) * 0.08;
+  F.mouseEyes.forEach(e => { e.rotation.y = 0; });
+  // 奶鼠受击红闪与蛋体一致
+  F.mats.forEach(m => m.emissive.setHex(frog.flinch > 0 ? 0x5a4010 : 0x000000));
+}
 function updateFrog(dt) {
   if (frog.dead) { deathAnimFrog(dt); F.root.position.x = frog.pos.x; F.root.position.z = frog.pos.z; return; }
   frog.center.set(frog.pos.x, CONFIG.enemy.hitHeight[frog.phase - 1] * frog.baseScale, frog.pos.z);
@@ -2245,6 +2454,7 @@ function updateFrog(dt) {
   if (frog.blinkT < 0) frog.blinkT = rand(2.4, 5);
   const blink = frog.blinkT < 0.13;
   F.eyeL.scale.y = F.eyeR.scale.y = blink ? 0.15 : 1;
+  if (F.mouseEyes) F.mouseEyes[0].scale.y = F.mouseEyes[1].scale.y = blink ? 0.15 : 1; // 奶鼠同步眨眼
   if (frog.state === 'stun') {
     frog.stunT -= dt;
     const k = Math.max(0, frog.stunT) / ec.transformStun;
@@ -2322,7 +2532,7 @@ function startCast(type) {
     F.chargeOrb.visible = true;
     F.chargeOrb.scale.setScalar(0.3);
     Sfx.rayWarn();
-    showSkillWarn('奶蛙蓄力吐射线 —— 快用袋鼠跳躲避！');
+    showSkillWarn(FROG_NAMES[frog.phase - 1] + '蓄力吐射线 —— 快用袋鼠跳躲避！');
   } else if (type === 'cheese') {
     c.phase = 'active';
     c.t = sk.cheese.duration;
@@ -2334,14 +2544,14 @@ function startCast(type) {
     c.t = sk.wave.warn;
     frog.cds.wave = sk.wave.warn + sk.wave.cooldown;
     Sfx.laugh();
-    showSkillWarn('奶蛙捧腹大笑 —— 白色声波扩散，快跳！');
+    showSkillWarn('奶斯拉捧腹大笑 —— 白色声波扩散，快跳！');
     F.waveRings[1].visible = true;
     F.waveRings[1].scale.setScalar(1);
   } else { // repel 被动·贴身弹飞
     c.t = sk.repel.warn;
     frog.cds.repel = sk.repel.warn + sk.repel.cooldown;
     Sfx.repelWarn();
-    showSkillWarn('奶蛙恼羞成怒 —— 贴身弹飞！快闪开！');
+    showSkillWarn(FROG_NAMES[frog.phase - 1] + '恼羞成怒 —— 贴身弹飞！快闪开！');
     F.waveRings[1].visible = true;
     F.waveRings[1].scale.setScalar(1);
   }
@@ -3056,7 +3266,7 @@ function startGame() {
   dom.pauseScreen.style.display = 'none';
   if (IS_TOUCH) tryFullscreen(true); // 手机开局进全屏并锁横屏（iOS 不支持则忽略）
   requestPointerLock();
-  centerMsg('只打奶蛙正面！背部会弹开子弹');
+  centerMsg('只打' + FROG_NAMES[frog.phase - 1] + '正面！背部会弹开子弹');
 }
 /* ================= 难度模式（简单 = 当前版本数值） ================= */
 const DIFFS = [
