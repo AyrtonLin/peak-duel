@@ -2123,83 +2123,99 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   sHead.scale.set(0.95, 0.88, 1.05);
   sp.add(sHead);
   F.slaHead = sHead;
-  // 吻部（轻微前伸的卡通口鼻）
-  const sMuzzle = mesh(new THREE.SphereGeometry(0.24, 14, 12), mSlaBody, 0, 1.94, 0.62);
-  sMuzzle.scale.set(1.15, 0.62, 0.9);
-  sp.add(sMuzzle);
   // 眼睛：独立鲜绿虹膜 + 黑瞳 + 高光，独立对象
   const mSlaIris = std(0x4f9a33, { roughness: 0.35 });
   F.mats.push(mSlaIris); // 受击红闪同步（索引 14）
   F.slaEyes = []; F.slaPupils = [];
-  [[-0.2], [0.2]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.155, 14, 12), mSlaIris, ex, 2.1, 0.62);
-    const pu = mesh(new THREE.SphereGeometry(0.09, 10, 8), mPup, 0, 0.01, 0.085);
-    pu.add(mesh(new THREE.SphereGeometry(0.028, 6, 6), mGlint, -0.026, 0.034, 0.08));
+  [[-0.21], [0.21]].forEach(([ex]) => {
+    const eye = mesh(new THREE.SphereGeometry(0.12, 14, 12), mSlaIris, ex, 2.1, 0.60); // 缩小并深嵌头椭球（突出量约减半）
+    const pu = mesh(new THREE.SphereGeometry(0.07, 10, 8), mPup, 0, 0.008, 0.07);
+    pu.add(mesh(new THREE.SphereGeometry(0.022, 6, 6), mGlint, -0.02, 0.026, 0.062));
     eye.add(pu);
     sp.add(eye);
     F.slaEyes.push(eye);
     F.slaPupils.push(pu);
   });
-  // 嘴：简洁卡通嘴（深棕短弧，微张可放奶泡）
-  F.slaMouth = mesh(new THREE.SphereGeometry(0.1, 12, 10), std(0x4a3018, { roughness: 0.8 }), 0, 1.78, 0.74);
-  F.slaMouth.scale.set(1.5, 0.45, 0.3);
-  sp.add(F.slaMouth);
-  // 手臂：粗壮圆润（肩部植入躯干），前臂体积变化 + 宽手掌 + 短指
+  // 嘴：贴头椭球面的细线微笑弧管（弧度平缓、宽度≈眼距；沿头面逐点采样生成，不穿模不悬浮）
+  {
+    const smileArc = Math.PI * 0.38, smileR = 0.37, cornerY = 1.93, tubeR = 0.022, lift0 = 0.018;
+    const mouthYc = cornerY + smileR * Math.cos(smileArc / 2); // 弧圆心（嘴角高度 = cornerY）
+    const headSurf = (X, Y) => { // 头椭球前表面 z（中心(0,2.06,0.28)，半轴 0.437/0.405/0.483，与 sHead 变形一致）
+      const q = 1 - Math.pow(X / 0.437, 2) - Math.pow((Y - 2.06) / 0.405, 2);
+      return 0.28 + 0.483 * Math.sqrt(Math.max(0, q));
+    };
+    const pivotZ = headSurf(0, cornerY) + lift0;
+    const pts = [];
+    for (let i = 0; i <= 24; i++) {
+      const phi = -smileArc / 2 + smileArc * (i / 24);
+      const ax = smileR * Math.sin(phi), ay = mouthYc - smileR * Math.cos(phi);
+      pts.push(new THREE.Vector3(ax, ay - cornerY, headSurf(ax, ay) + lift0 - pivotZ));
+    }
+    const mpivot = new THREE.Group(); // pivot 在嘴角高度：施法张嘴 scale 就地加深
+    mpivot.position.set(0, cornerY, pivotZ);
+    mpivot.add(mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 28, tubeR, 6, false), mMouth, 0, 0, 0));
+    F.slaMouth = mpivot;
+    sp.add(F.slaMouth);
+  }
+  // 手臂：变细伸长（肩部植入躯干）+ 灰绿色五指手掌
+  const mSlaHand = std(0x8b9e82, { roughness: 0.55 });
+  F.mats.push(mSlaHand); // 受击红闪同步
   F.slaArms = [];
   [[-1, -0.78], [1, 0.78]].forEach(([sd, ax]) => {
     const arm = new THREE.Group();
     arm.position.set(ax, 1.62, 0.16);
     arm.rotation.z = -sd * 0.5;    // 微张
     arm.rotation.x = 0.35;         // 略向前伸
-    const upper = mesh(new THREE.CapsuleGeometry(0.2, 0.34, 4, 12), mSlaBody, 0, -0.24, 0);
-    upper.scale.set(1.05, 1, 1.0);
-    const fore = mesh(new THREE.CapsuleGeometry(0.22, 0.22, 4, 12), mSlaBody, 0, -0.56, 0.08);
-    fore.scale.set(1.08, 1, 1.05);
+    const upper = mesh(new THREE.CapsuleGeometry(0.13, 0.5, 4, 12), mSlaBody, 0, -0.3, 0);
+    const fore = mesh(new THREE.CapsuleGeometry(0.11, 0.45, 4, 12), mSlaBody, 0, -0.72, 0.04);
     arm.add(upper, fore);
-    // 手掌（宽扁）+ 三根短指
-    const palm = mesh(new THREE.SphereGeometry(0.19, 10, 8), mSlaBody, 0, -0.82, 0.12);
-    palm.scale.set(1.15, 0.8, 0.95);
+    // 灰绿色手掌（宽扁）+ 五根分明手指（中指最长、拇指粗短，自然扇开）
+    const palm = mesh(new THREE.SphereGeometry(0.14, 10, 8), mSlaHand, 0, -1.02, 0.04);
+    palm.scale.set(1.3, 0.9, 0.85);
     arm.add(palm);
-    [[-0.11], [0], [0.11]].forEach(([fx], fi) => {
-      const fg = mesh(new THREE.CapsuleGeometry(0.055, 0.1, 3, 8), mSlaBody, fx, -0.98, 0.16 + fi * 0.02);
+    [[-0.105, 0.11], [-0.052, 0.14], [0, 0.15], [0.052, 0.13], [0.105, 0.10]].forEach(([fx, L], fi) => {
+      const fg = mesh(new THREE.CapsuleGeometry(fi === 0 ? 0.042 : 0.036, L, 3, 8), mSlaHand, fx, -1.16 - L / 2, 0.06);
+      fg.rotation.z = fx * 1.2; // 五指沿掌缘自然扇开
       arm.add(fg);
     });
     arm.userData.baseZ = arm.rotation.z;
     F.slaArms.push(arm);
     sp.add(arm);
   });
-  // 腿：粗壮大腿下沉，脚掌宽大 + 独立脚趾
+  // 腿：粗壮大腿，脚掌宽大 + 独立脚趾（pivot 上移修复脚底穿地：站立脚底约 +0.03，行走摆动最低点贴地不沉）
   F.slaLegs = [];
   [[-1, -0.44], [1, 0.44]].forEach(([sd, lx]) => {
     const leg = new THREE.Group();
-    leg.position.set(lx, 0.52, 0.02);
+    leg.position.set(lx, 0.76, 0.02);
     leg.rotation.x = 0.15; // 大腿略前跨
     const thigh = mesh(new THREE.CapsuleGeometry(0.26, 0.34, 4, 12), mSlaBody, 0, -0.22, 0);
     thigh.scale.set(1.1, 1, 1.05);
-    const calf = mesh(new THREE.CapsuleGeometry(0.2, 0.18, 4, 10), mSlaBody, 0, -0.62, 0.02);
+    const calf = mesh(new THREE.CapsuleGeometry(0.2, 0.18, 4, 10), mSlaBody, 0, -0.46, 0.02);
     leg.add(thigh, calf);
     // 宽脚掌 + 三根脚趾（独立建模）
-    const foot = mesh(new THREE.SphereGeometry(0.24, 12, 10), mSlaBody, 0, -0.76, 0.12);
+    const foot = mesh(new THREE.SphereGeometry(0.24, 12, 10), mSlaBody, 0, -0.64, 0.12);
     foot.scale.set(1.0, 0.36, 1.5);
     leg.add(foot);
     [[-0.13], [0], [0.13]].forEach(([tx], ti) => {
-      const toe = mesh(new THREE.SphereGeometry(0.075, 8, 6), mSlaBody, tx, -0.82, 0.44 - ti * 0.035);
+      const toe = mesh(new THREE.SphereGeometry(0.075, 8, 6), mSlaBody, tx, -0.65, 0.30 - ti * 0.035);
       toe.scale.set(0.9, 0.62, 1.1);
       leg.add(toe);
     });
     F.slaLegs.push(leg);
     sp.add(leg);
   });
-  // 尾巴：粗壮后弯 + 末端上翘（Tube 根粗尾细，pivot 在尾根）
+  // 尾巴：粗壮后弯 + 末端上翘（Tube 根粗尾细；pivot 内植躯干，首点深埋体内保证与身体连接完整）
   const slaTailPivot = new THREE.Group();
-  slaTailPivot.position.set(0, 0.78, -0.86);
+  slaTailPivot.position.set(0, 0.78, -0.58);
   F.slaTailPivot = slaTailPivot;
-  const sTailPts = [
-    new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(0.05, -0.12, -0.62),
-    new THREE.Vector3(0.28, -0.18, -1.15),
-    new THREE.Vector3(0.52, -0.06, -1.52),
-    new THREE.Vector3(0.58, 0.14, -1.72)
+  const sTailPts = [ // 首点深植躯干内，末四点保持原世界轨迹，出躯干处与后背无缝衔接
+    new THREE.Vector3(0, 0, 0.28),
+    new THREE.Vector3(0.02, -0.02, 0.02),
+    new THREE.Vector3(0.03, -0.07, -0.44),
+    new THREE.Vector3(0.05, -0.12, -0.90),
+    new THREE.Vector3(0.28, -0.18, -1.43),
+    new THREE.Vector3(0.52, -0.06, -1.80),
+    new THREE.Vector3(0.58, 0.14, -2.00)
   ];
   const sTailCurve = new THREE.CatmullRomCurve3(sTailPts);
   const sTailGeo = new THREE.TubeGeometry(sTailCurve, 30, 0.3, 10, false);
@@ -2698,8 +2714,8 @@ function animateSlaBody(t, moving, mode) {
     const sl = _v1.length() || 1;
     const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / sl;
     const px = clamp(side, -1, 1) * 0.08;
-    F.slaPupils[0].position.set(px, 0.01, 0.1);
-    F.slaPupils[1].position.set(px, 0.01, 0.1);
+    F.slaPupils[0].position.set(px, 0.008, 0.07);
+    F.slaPupils[1].position.set(px, 0.008, 0.07);
   }
   // 尾巴摆动（厚重慢摆）
   const tp = moving ? t * 7 : t * 2.6;
