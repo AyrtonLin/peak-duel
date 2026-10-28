@@ -1953,9 +1953,9 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       const t = (y + 1) / 2;
-      // 梨形 + 微脖颈：头部略收小，颈处轻凹出脖子感（内收保持不变，都不过度）
+      // 梨形 + 微脖颈：头再收小一档，头顶用更宽凸包包圆更顺滑，颈内吸保持不变
       const u = Math.max(0.001, (t - 0.05) / 0.95);
-      const k = 0.98 - 0.34 * Math.pow(u, 1.5) - 0.035 * Math.exp(-Math.pow((t - 0.72) / 0.05, 2)) + 0.06 * Math.exp(-Math.pow((t - 0.86) / 0.11, 2));
+      const k = 0.98 - 0.38 * Math.pow(u, 1.5) - 0.035 * Math.exp(-Math.pow((t - 0.72) / 0.05, 2)) + 0.05 * Math.exp(-Math.pow((t - 0.86) / 0.13, 2));
       const ny = y + 0.09 * Math.exp(-Math.pow((y + 1) / 0.26, 2)); // 底部微平
       pos.setXYZ(i, x * k, ny, z * k);
     }
@@ -1990,8 +1990,13 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     F.mouseEyes.push(eye);
     F.mousePupils.push(pu);
   });
-  // 嘴：小巧细长微笑弧（深棕细线，贴小头面）
-  F.mouseMouth = mesh(new THREE.TorusGeometry(0.135, 0.023, 6, 14, Math.PI * 0.75), mMouth, 0, 1.42, 0.75);
+  // 口鼻部：奶油色吻部微鼓（正脸前凸做出下巴感）+ 微笑弧度减小
+  const mMouseCream = std(0xfff3cf);
+  F.mats.push(mMouseCream); // 红闪同步
+  const muzzle = mesh(new THREE.SphereGeometry(0.14, 14, 12), mMouseCream, 0, 1.4, 0.7);
+  muzzle.scale.set(1.2, 0.8, 0.55); // 扁椭球：微鼓不夸张
+  mb.add(muzzle);
+  F.mouseMouth = mesh(new THREE.TorusGeometry(0.135, 0.023, 6, 14, Math.PI * 0.55), mMouth, 0, 1.42, 0.78);
   F.mouseMouth.rotation.set(-0.3, 0, Math.PI + 0.16);
   mb.add(F.mouseMouth);
   // 手臂：圆台（肩粗掌细渐变柱）拼接圆润圆掌（参考图手套状无分指）
