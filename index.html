@@ -1859,7 +1859,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   /* 奶蛋（参考图）配色：香草蛋黄体 + 绿虹膜黑瞳 + 棕灰细嘴 */
   const mBody = std(0xeed98f), mBelly = std(0xfaf0c8), mDark = std(0x3a2c14), mWhite = std(0xffffff), mSpot = std(0xdcc377);
   const mIrisG = std(0x2e6b1f, { roughness: 0.4 });                // 深绿虹膜（微光泽）
-  const mPup   = std(0x141414, { roughness: 0.25 });               // 黑瞳
+  const mPup   = std(0x000000, { roughness: 0.3 });               // 纯黑瞳
   const mMouth = std(0x6e5c46, { roughness: 0.55 });               // 棕灰嘴弧
   const mGlint = new THREE.MeshBasicMaterial({ color: 0xffffff }); // 高光点（无 emissive，勿入 F.mats）
   F.mats = [mBody, mBelly, mDark, mWhite, mSpot, mIrisG, mPup, mMouth];
@@ -1902,14 +1902,14 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.eyeL = mesh(eyeGeo, mIrisG, -0.26, 1.62, 0.575);
   F.eyeR = mesh(eyeGeo, mIrisG, 0.26, 1.62, 0.575);
   body.add(F.eyeL, F.eyeR);
-  const pupilGeo = new THREE.SphereGeometry(0.07, 10, 8);
+  const pupilGeo = new THREE.SphereGeometry(0.09, 10, 8);
   const puL = mesh(pupilGeo, mPup, 0, 0, 0.045);
   const puR = mesh(pupilGeo, mPup, 0, 0, 0.045);
   F.eyeL.add(puL); F.eyeR.add(puR); // 挂眼睛下：眨眼时瞳孔随眼皮一起压扁
   F.pupils.push(puL, puR);
   const glintGeo = new THREE.SphereGeometry(0.025, 8, 6);
-  puL.add(mesh(glintGeo, mGlint, -0.02, 0.028, 0.05));
-  puR.add(mesh(glintGeo, mGlint, -0.02, 0.028, 0.05));
+  puL.add(mesh(glintGeo, mGlint, -0.025, 0.035, 0.06));
+  puR.add(mesh(glintGeo, mGlint, -0.025, 0.035, 0.06));
   // 喙包（参考图嘴下的下巴隆起剪影，同体色）
   const bill = mesh(new THREE.SphereGeometry(0.2, 14, 10), mBody, 0, 1.22, 0.74);
   bill.scale.set(1.1, 0.35, 0.5);
@@ -3018,7 +3018,7 @@ function resetGame() {
   frog.strafeT = 0; frog.strafeDir = 1;
   F.root.rotation.set(0, 0, 0);
   F.root.position.copy(frog.pos);
-  F.pupils.forEach(p => { p.material = F.mats[2]; p.scale.set(1, 1, 1); });
+  F.pupils.forEach(p => { p.material = F.mats[6]; p.scale.set(1, 1, 1); }); // mPup 纯黑瞳
   F.eyeL.scale.y = F.eyeR.scale.y = 1;
   F.mouth.scale.set(1, 1, 1);
   applyFrogPhase(1);
