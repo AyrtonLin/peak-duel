@@ -1873,7 +1873,10 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       const t = (y + 1) / 2;                                        // 0 底 → 1 顶
-      const k = 1.08 - 0.42 * Math.pow(Math.max(0.001, (t - 0.12) / 0.88), 1.3); // 宽底+加胖圆润头部（防尖顶）
+      // 下半身宽底轮廓（不变）+ 上半头部平滑加宽（C1 过渡，t>0.6 起）
+      const kBase = 1.08 - 0.42 * Math.pow(Math.max(0.001, (t - 0.12) / 0.88), 1.3);
+      const s = Math.max(0, Math.min(1, (t - 0.6) / 0.4));
+      const k = kBase + 0.14 * s * s * (3 - 2 * s);
       const ny = y + 0.16 * Math.exp(-Math.pow((y + 1) / 0.22, 2)); // 底部平滑压扁抬升
       pos.setXYZ(i, x * k, ny, z * k);
     }
@@ -1894,12 +1897,12 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   // 大眼睛（参考图：小眼嵌入蛋面，不突出；绿虹膜 + 黑瞳 + 高光点）
   const eyeGeo = new THREE.SphereGeometry(0.12, 14, 12);
-  F.eyeL = mesh(eyeGeo, mIrisG, -0.34, 1.62, 0.44);
-  F.eyeR = mesh(eyeGeo, mIrisG, 0.34, 1.62, 0.44);
+  F.eyeL = mesh(eyeGeo, mIrisG, -0.26, 1.62, 0.575);
+  F.eyeR = mesh(eyeGeo, mIrisG, 0.26, 1.62, 0.575);
   body.add(F.eyeL, F.eyeR);
   const pupilGeo = new THREE.SphereGeometry(0.07, 10, 8);
-  const puL = mesh(pupilGeo, mPup, 0, 0, 0.06);
-  const puR = mesh(pupilGeo, mPup, 0, 0, 0.06);
+  const puL = mesh(pupilGeo, mPup, 0, 0, 0.045);
+  const puR = mesh(pupilGeo, mPup, 0, 0, 0.045);
   F.eyeL.add(puL); F.eyeR.add(puR); // 挂眼睛下：眨眼时瞳孔随眼皮一起压扁
   F.pupils.push(puL, puR);
   const glintGeo = new THREE.SphereGeometry(0.025, 8, 6);
@@ -1910,7 +1913,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   bill.scale.set(1.1, 0.35, 0.5);
   body.add(bill);
   // 嘴（参考图同款水平直线细嘴；射线从嘴前锚点喷出）
-  F.mouth = mesh(new THREE.CapsuleGeometry(0.015, 0.22, 4, 8), mMouth, 0, 1.47, 0.795);
+  F.mouth = mesh(new THREE.CapsuleGeometry(0.015, 0.22, 4, 8), mMouth, 0, 1.47, 0.845);
   F.mouth.rotation.z = Math.PI / 2;
   body.add(F.mouth);
   F.mouthAnchor = new THREE.Object3D();
@@ -1940,12 +1943,12 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.crown.add(wedge);
   F.crown.add(mesh(new THREE.SphereGeometry(0.05, 6, 6), mDark, 0.08, 0.12, 0.14));
   F.crown.add(mesh(new THREE.SphereGeometry(0.05, 6, 6), mDark, 0.2, 0.12, 0.02));
-  F.crown.position.set(0, 2.0, 0.1);
+  F.crown.position.set(0, 2.06, 0.1);
   F.crown.rotation.y = -0.4;
   body.add(F.crown);
   // 三阶段：金色眉毛 + 光环（贴蛋形轮廓，眉位于眼上前方）
   const browMat = std(0xc9862a);
-  [[-0.24, 1.8, 0.38], [0.24, 1.8, 0.38]].forEach(p => {
+  [[-0.24, 1.8, 0.45], [0.24, 1.8, 0.45]].forEach(p => {
     const br = mesh(new THREE.BoxGeometry(0.26, 0.075, 0.1), browMat, p[0], p[1], p[2]);
     br.rotation.x = -0.22; // 贴蛋面倾斜，避免陷入/悬空
     br.rotation.z = p[0] < 0 ? -0.35 : 0.35;
@@ -2227,8 +2230,8 @@ function animateFrog(dt, moving, mode) {
   const dLen = _v1.length() || 1;
   const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / dLen;
   const px = clamp(side, -1, 1) * 0.09;
-  F.pupils[0].position.set(px, 0, 0.06);
-  F.pupils[1].position.set(px, 0, 0.06);
+  F.pupils[0].position.set(px, 0, 0.045);
+  F.pupils[1].position.set(px, 0, 0.045);
   F.mats.forEach(m => m.emissive.setHex(frog.flinch > 0 ? 0x5a4010 : 0x000000));
 }
 function updateFrog(dt) {
