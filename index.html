@@ -1953,9 +1953,9 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       const t = (y + 1) / 2;
-      // 梨形 + 微脖颈：上收大头的基线上，颈处轻凹出一点脖子，头部再微鼓更圆滑（都不过度）
+      // 梨形 + 微脖颈：头部略收小，颈处轻凹出脖子感（内收保持不变，都不过度）
       const u = Math.max(0.001, (t - 0.05) / 0.95);
-      const k = 0.98 - 0.28 * Math.pow(u, 1.5) - 0.035 * Math.exp(-Math.pow((t - 0.72) / 0.05, 2)) + 0.06 * Math.exp(-Math.pow((t - 0.86) / 0.11, 2));
+      const k = 0.98 - 0.34 * Math.pow(u, 1.5) - 0.035 * Math.exp(-Math.pow((t - 0.72) / 0.05, 2)) + 0.06 * Math.exp(-Math.pow((t - 0.86) / 0.11, 2));
       const ny = y + 0.09 * Math.exp(-Math.pow((y + 1) / 0.26, 2)); // 底部微平
       pos.setXYZ(i, x * k, ny, z * k);
     }
@@ -1981,17 +1981,17 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   // 眼睛：浅黄绿虹膜圈 + 大黑瞳 + 高光（原尺寸 2/3，深嵌头部曲面）
   F.mouseEyes = []; F.mousePupils = [];
-  [[-0.22], [0.22]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.1, 14, 12), mIrisG, ex, 1.58, 0.58);
-    const pu = mesh(new THREE.SphereGeometry(0.072, 10, 8), mPup, 0, 0.003, 0.05);
-    pu.add(mesh(new THREE.SphereGeometry(0.016, 6, 6), mGlint, -0.016, 0.02, 0.038));
+  [[-0.21], [0.21]].forEach(([ex]) => {
+    const eye = mesh(new THREE.SphereGeometry(0.09, 14, 12), mIrisG, ex, 1.66, 0.53);
+    const pu = mesh(new THREE.SphereGeometry(0.065, 10, 8), mPup, 0, 0.003, 0.045);
+    pu.add(mesh(new THREE.SphereGeometry(0.014, 6, 6), mGlint, -0.014, 0.018, 0.034));
     eye.add(pu);
     mb.add(eye);
     F.mouseEyes.push(eye);
     F.mousePupils.push(pu);
   });
   // 嘴：小巧细长微笑弧（深棕细线，贴小头面）
-  F.mouseMouth = mesh(new THREE.TorusGeometry(0.15, 0.026, 6, 14, Math.PI * 0.75), mMouth, 0, 1.36, 0.83);
+  F.mouseMouth = mesh(new THREE.TorusGeometry(0.135, 0.023, 6, 14, Math.PI * 0.75), mMouth, 0, 1.42, 0.75);
   F.mouseMouth.rotation.set(-0.3, 0, Math.PI + 0.16);
   mb.add(F.mouseMouth);
   // 手臂：圆台（肩粗掌细渐变柱）拼接圆润圆掌（参考图手套状无分指）
@@ -2589,8 +2589,8 @@ function animateMouseBody(t, moving, mode) {
     const dLen = _v1.length() || 1;
     const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / dLen;
     const px = clamp(side, -1, 1) * 0.09;
-    F.mousePupils[0].position.set(px, 0.003, 0.05);
-    F.mousePupils[1].position.set(px, 0.003, 0.05);
+    F.mousePupils[0].position.set(px, 0.003, 0.045);
+    F.mousePupils[1].position.set(px, 0.003, 0.045);
   }
   // 尾巴独立摆动：走快 / 站慢
   const tSpeed = moving ? t * 9 : t * 3.2;
