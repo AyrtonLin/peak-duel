@@ -1889,11 +1889,13 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const belly = mesh(new THREE.SphereGeometry(0.72, 18, 14), mBelly, 0, 0.82, 0.74);
   belly.scale.set(1, 0.88, 0.58);
   body.add(belly);
-  // 背部斑点（提示背部无敌——贴出背壳表面，必须可见）
+  // 背部斑凸（提示背部无敌）：一阶奶蛋壳面光滑无突起（入 F.eggHide），二阶起可见
+  F.backSpots = [];
   [[-0.45, 1.1, -0.94], [0.4, 1.25, -0.9], [0, 0.75, -1.0]].forEach(p => {
     const s = mesh(new THREE.SphereGeometry(0.16, 8, 6), mSpot, p[0], p[1], p[2]);
     s.scale.set(1, 0.5, 0.6);
     body.add(s);
+    F.backSpots.push(s);
   });
   // 大眼睛（参考图：小眼嵌入蛋面，不突出；绿虹膜 + 黑瞳 + 高光点）
   const eyeGeo = new THREE.SphereGeometry(0.12, 14, 12);
@@ -1934,8 +1936,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     body.add(l);
     F.legs.push(l);
   });
-  // 一阶奶蛋：蛋无四肢、无腹部色块（进化后才长出蛙四肢）
-  F.eggHide = [belly, armL, armR].concat(F.legs);
+  // 一阶奶蛋：蛋无四肢、无腹部色块、背部光滑（进化后才长出蛙四肢与背斑）
+  F.eggHide = [belly, armL, armR].concat(F.legs, F.backSpots);
   // 二阶段：奶酪皇冠
   F.crown = new THREE.Group();
   const cheeseMat = std(0xffd54f, { roughness: 0.6 });
