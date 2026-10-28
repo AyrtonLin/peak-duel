@@ -1856,40 +1856,65 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   armL: null, armR: null, legs: [] };
 
 (function buildFrog() {
-  const mBody = std(0xeed98f), mBelly = std(0xfaf0c8), mDark = std(0x3a2c14), mWhite = std(0xffffff), mSpot = std(0xd6b96a);
-  F.mats = [mBody, mBelly, mDark, mWhite, mSpot];
+  /* 奶蛋（参考图）配色：香草蛋黄体 + 绿虹膜黑瞳 + 棕灰细嘴 */
+  const mBody = std(0xeed98f), mBelly = std(0xfaf0c8), mDark = std(0x3a2c14), mWhite = std(0xffffff), mSpot = std(0xdcc377);
+  const mIrisG = std(0x55843a, { roughness: 0.4 });                // 绿虹膜（微光泽）
+  const mPup   = std(0x141414, { roughness: 0.25 });               // 黑瞳
+  const mMouth = std(0x6e5c46, { roughness: 0.55 });               // 棕灰嘴弧
+  const mGlint = new THREE.MeshBasicMaterial({ color: 0xffffff }); // 高光点（无 emissive，勿入 F.mats）
+  F.mats = [mBody, mBelly, mDark, mWhite, mSpot, mIrisG, mPup, mMouth];
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
-  // 主体
-  const torso = mesh(new THREE.SphereGeometry(0.95, 24, 20), mBody, 0, 0.95, 0);
-  torso.scale.set(1.08, 0.92, 1.18);
+  // 蛋形主体：球体顶点变形 —— 底宽上窄、底部微压扁（非普通球体）
+  const eggGeo = new THREE.SphereGeometry(1, 28, 24);
+  {
+    const pos = eggGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const t = (y + 1) / 2;                                        // 0 底 → 1 顶
+      const k = 1.08 - 0.5 * Math.pow(Math.max(0.001, (t - 0.15) / 0.85), 1.2); // 宽底窄顶蛋形轮廓
+      const ny = y + 0.16 * Math.exp(-Math.pow((y + 1) / 0.22, 2)); // 底部平滑压扁抬升
+      pos.setXYZ(i, x * k, ny, z * k);
+    }
+    eggGeo.computeVertexNormals();
+  }
+  const torso = new THREE.Mesh(eggGeo, mBody);
+  torso.position.set(0, 0.97, 0);
+  torso.scale.set(1.04, 1.0, 1.16);
   body.add(torso);
   const belly = mesh(new THREE.SphereGeometry(0.72, 18, 14), mBelly, 0, 0.82, 0.74);
   belly.scale.set(1, 0.88, 0.58);
   body.add(belly);
   // 背部斑点（提示背部无敌——贴出背壳表面，必须可见）
-  [[-0.45, 1.1, -0.97], [0.4, 1.25, -0.93], [0, 0.75, -1.05]].forEach(p => {
+  [[-0.45, 1.1, -0.94], [0.4, 1.25, -0.9], [0, 0.75, -1.0]].forEach(p => {
     const s = mesh(new THREE.SphereGeometry(0.16, 8, 6), mSpot, p[0], p[1], p[2]);
     s.scale.set(1, 0.5, 0.6);
     body.add(s);
   });
-  // 大眼睛（头顶）
-  const eyeGeo = new THREE.SphereGeometry(0.3, 14, 12);
-  F.eyeL = mesh(eyeGeo, mWhite, -0.38, 1.72, 0.32);
-  F.eyeR = mesh(eyeGeo, mWhite, 0.38, 1.72, 0.32);
+  // 大眼睛（奶蛋参考图：小而贴面、绿虹膜 + 黑大瞳 + 高光点，微突出）
+  const eyeGeo = new THREE.SphereGeometry(0.24, 16, 14);
+  F.eyeL = mesh(eyeGeo, mIrisG, -0.34, 1.62, 0.42);
+  F.eyeR = mesh(eyeGeo, mIrisG, 0.34, 1.62, 0.42);
   body.add(F.eyeL, F.eyeR);
-  const pupilGeo = new THREE.SphereGeometry(0.13, 10, 8);
-  const puL = mesh(pupilGeo, mDark, 0, 0.02, 0.26);
-  const puR = mesh(pupilGeo, mDark, 0, 0.02, 0.26);
+  const pupilGeo = new THREE.SphereGeometry(0.13, 12, 10);
+  const puL = mesh(pupilGeo, mPup, 0, 0.02, 0.17);
+  const puR = mesh(pupilGeo, mPup, 0, 0.02, 0.17);
   F.eyeL.add(puL); F.eyeR.add(puR); // 挂眼睛下：眨眼时瞳孔随眼皮一起压扁
   F.pupils.push(puL, puR);
-  // 嘴（原风格细弧线微笑——抬出体表可见；射线从嘴前锚点喷出）
-  F.mouth = mesh(new THREE.TorusGeometry(0.34, 0.07, 8, 16, Math.PI * 0.9), mDark, 0, 0.85, 1.08);
-  F.mouth.rotation.z = Math.PI + 0.15;
+  const glintGeo = new THREE.SphereGeometry(0.04, 8, 6);
+  puL.add(mesh(glintGeo, mGlint, -0.04, 0.06, 0.1));
+  puR.add(mesh(glintGeo, mGlint, -0.04, 0.06, 0.1));
+  // 喙包（参考图嘴下的下巴隆起剪影，同体色）
+  const bill = mesh(new THREE.SphereGeometry(0.2, 14, 10), mBody, 0, 1.22, 0.74);
+  bill.scale.set(1.1, 0.35, 0.5);
+  body.add(bill);
+  // 嘴（细弧线微笑，随蛋面收窄前倾贴面；射线从嘴前锚点喷出）
+  F.mouth = mesh(new THREE.TorusGeometry(0.17, 0.04, 6, 16, Math.PI * 0.8), mMouth, 0, 1.47, 0.8);
+  F.mouth.rotation.set(-0.45, 0, Math.PI + 0.2);
   body.add(F.mouth);
   F.mouthAnchor = new THREE.Object3D();
-  F.mouthAnchor.position.set(0, 0.85, 1.16); // 嘴外前方：光束起点不被躯干裁剪
+  F.mouthAnchor.position.set(0, 1.3, 1.05); // 嘴外前方：光束起点不被躯干/喙包裁剪
   body.add(F.mouthAnchor);
   // 小手臂
   const armGeo = new THREE.CapsuleGeometry(0.11, 0.3, 4, 8);
@@ -1906,6 +1931,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     body.add(l);
     F.legs.push(l);
   });
+  // 一阶奶蛋：蛋无四肢、无腹部色块（进化后才长出蛙四肢）
+  F.eggHide = [belly, armL, armR].concat(F.legs);
   // 二阶段：奶酪皇冠
   F.crown = new THREE.Group();
   const cheeseMat = std(0xffd54f, { roughness: 0.6 });
@@ -1916,10 +1943,11 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.crown.position.set(0, 2.0, 0.1);
   F.crown.rotation.y = -0.4;
   body.add(F.crown);
-  // 三阶段：金色眉毛 + 光环
+  // 三阶段：金色眉毛 + 光环（贴蛋形轮廓，眉位于眼上前方）
   const browMat = std(0xc9862a);
-  [[-0.38, 1.95, 0.45], [0.38, 1.95, 0.45]].forEach(p => {
-    const br = mesh(new THREE.BoxGeometry(0.3, 0.08, 0.1), browMat, p[0], p[1], p[2]);
+  [[-0.24, 1.8, 0.38], [0.24, 1.8, 0.38]].forEach(p => {
+    const br = mesh(new THREE.BoxGeometry(0.26, 0.075, 0.1), browMat, p[0], p[1], p[2]);
+    br.rotation.x = -0.22; // 贴蛋面倾斜，避免陷入/悬空
     br.rotation.z = p[0] < 0 ? -0.35 : 0.35;
     F.brows.push(br);
     body.add(br);
@@ -1930,7 +1958,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   body.add(F.aura);
   // 射线蓄力光球
   F.chargeOrb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
-  F.chargeOrb.position.set(0, 0.85, 1.14); // 蓄力光球悬在嘴前
+  F.chargeOrb.position.set(0, 1.3, 1.14); // 蓄力光球悬在嘴前
   F.chargeOrb.visible = false;
   body.add(F.chargeOrb);
   // 射线光束：亮核 + 主束 + 外辉 + 两级滞后拖尾（弯曲轨迹）
@@ -1965,7 +1993,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
 F.procParts = F.body.children.filter(c => c !== F.mouthAnchor && c !== F.chargeOrb);
 
 const FROG_PHASE_LOOK = [
-  { body: 0xeed98f, spot: 0xd6b96a, scale: 2.55 },
+  { body: 0xeed98f, spot: 0xdcc377, scale: 2.55 },
   { body: 0xe5c859, spot: 0xcfa94e, scale: 2.91 },
   { body: 0xf2ede7, spot: 0xd8c8a8, scale: 3.3 }
 ];
@@ -1978,8 +2006,9 @@ function applyFrogPhase(n) {
   frog.hitR = CONFIG.enemy.hitRadius[n - 1];
   frog.phase = n;
   // 该阶段有 GLB 模型则隐藏程序化占位部件，否则用占位模型
+  // 一阶奶蛋：蛋无四肢（隐藏腹色块与蛙四肢），二阶起进化出四肢
   const hasGlb = !!(Models.frogHolders && Models.frogHolders[n - 1]);
-  F.procParts.forEach(p => { p.visible = !hasGlb; });
+  F.procParts.forEach(p => { p.visible = !hasGlb && !(n === 1 && F.eggHide.indexOf(p) >= 0); });
   F.crown.visible = !hasGlb && n >= 2;
   F.brows.forEach(b => { b.visible = !hasGlb && n >= 3; });
   F.aura.visible = !hasGlb && n >= 3;
@@ -2198,8 +2227,8 @@ function animateFrog(dt, moving, mode) {
   const dLen = _v1.length() || 1;
   const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / dLen;
   const px = clamp(side, -1, 1) * 0.09;
-  F.pupils[0].position.set(px, 0.01, 0.26);
-  F.pupils[1].position.set(px, 0.01, 0.26);
+  F.pupils[0].position.set(px, 0.01, 0.17);
+  F.pupils[1].position.set(px, 0.01, 0.17);
   F.mats.forEach(m => m.emissive.setHex(frog.flinch > 0 ? 0x5a4010 : 0x000000));
 }
 function updateFrog(dt) {
