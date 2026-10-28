@@ -2096,7 +2096,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const sp = new THREE.Group(); // 姿态组：呼吸/摆动整体作用
   slaBase.add(sp);
   F.slaPose = sp;
-  // 躯干：宽大厚实哥斯拉态（顶点变形球，肩窄臀宽、腹部前凸）
+  // 躯干：宽大厚实哥斯拉态（顶点变形球，肩窄臀宽、腹部前凸；下体裆+臀一体浅平弧面）
   const slaBodyGeo = new THREE.SphereGeometry(1, 28, 22);
   {
     const ps = slaBodyGeo.attributes.position;
@@ -2105,7 +2105,13 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
       const tt = (y + 1) / 2;
       const k = 1.06 - 0.3 * Math.pow(Math.max(0.001, (tt - 0.08) / 0.92), 1.5); // 底宽上收（宽肩雏形）
       const front = z > 0 ? 1.06 - 0.10 * Math.exp(-Math.pow((tt - 0.30) / 0.28, 2)) : 1.0; // 腹部前鼓（下腹收进：tt≈0.30 处前凸最多减 0.10）
-      ps.setXYZ(i, x * k, y, z * k * front);
+      let ny = y;
+      if (y < -0.10) { // 下体（裆部+臀部）整体内收：底部竖向压扁成一体浅平弧面（无 V 形内凹、无折叠）
+        const d = -0.10 - y; // 距弧面上沿深度（0 → 0.90）
+        const u = Math.pow(d / 0.90, 1.6); // 深度权重（单调保序：浅处密、深处疏）
+        ny = -0.10 - 0.198 * u; // 弧底 sp ≈ 0.72（大腿根 0.835 附近），弧缘平滑升回 sp 0.92 上沿
+      }
+      ps.setXYZ(i, x * k, ny, z * k * front);
     }
     slaBodyGeo.computeVertexNormals();
   }
@@ -2113,8 +2119,21 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   sTorso.position.set(0, 1.02, 0);
   sTorso.scale.set(0.86, 1.0, 0.88);
   sp.add(sTorso);
-  // 腹部：独立浅奶油色曲面网格（下腹内收：后移+缩窄，埋入躯干内边界自然过渡）
-  const sBelly = mesh(new THREE.SphereGeometry(0.66, 22, 18), mSlaBelly, 0, 0.92, 0.42);
+  // 腹部：独立浅奶油色曲面网格（与躯干同一浅平弧面：裆部+臀部分界消失，弧底至大腿根线，乳肚挂胸不下垂）
+  const sBellyGeo = new THREE.SphereGeometry(0.66, 22, 18);
+  {
+    const ps = sBellyGeo.attributes.position;
+    for (let i = 0; i < ps.count; i++) {
+      const x = ps.getX(i), y = ps.getY(i);
+      if (y < -0.05) { // 局部 -0.05（mesh scale y 0.90 → sp ≈ 0.875）
+        const d = -0.05 - y; // 0 → 0.61
+        const u = Math.pow(d / 0.61, 1.6); // 与躯干同式：一体浅平弧面、无折叠
+        ps.setY(i, -0.05 - 0.159 * u); // 弧底 sp ≈ 0.73，与躯干弧面齐平
+      }
+    }
+    sBellyGeo.computeVertexNormals();
+  }
+  const sBelly = mesh(sBellyGeo, mSlaBelly, 0, 0.92, 0.42);
   sBelly.scale.set(0.80, 0.90, 0.62);
   sp.add(sBelly);
   F.slaBellyMesh = sBelly;
@@ -2160,31 +2179,27 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     F.slaMouth = mpivot;
     sp.add(F.slaMouth);
   }
-  // 手臂：变细伸长 + 灰绿色五指手掌；招架姿势（大臂向外打开抬起、肘部弯折前臂横于胸前，避免与身体重叠）
+  // 手臂：一节直臂斜向外展开 + 肩球过渡（臂根埋入躯干内，连接顺滑无断层）+ 灰绿色五指手掌
   const mSlaHand = std(0x8b9e82, { roughness: 0.55 });
   F.mats.push(mSlaHand); // 受击红闪同步
   F.slaArms = [];
-  [[-1, -0.78], [1, 0.78]].forEach(([sd, ax]) => {
+  [[-1, -0.68], [1, 0.68]].forEach(([sd, ax]) => {
     const arm = new THREE.Group();
-    arm.position.set(ax, 1.62, 0.16);
-    arm.rotation.z = sd * 0.85;    // 大臂向外打开抬起（招架外张）
-    arm.rotation.x = 0.30;         // 略向前伸
-    const upper = mesh(new THREE.CapsuleGeometry(0.13, 0.5, 4, 12), mSlaBody, 0, -0.3, 0);
-    const elbow = new THREE.Group(); // 肘关节：前臂内折上抬（招架弯曲，动画不覆盖、恒保折臂）
-    elbow.position.set(0, -0.58, 0);
-    elbow.rotation.set(-0.25, 0, -sd * 1.15);
-    const fore = mesh(new THREE.CapsuleGeometry(0.11, 0.45, 4, 12), mSlaBody, 0, -0.36, 0);
-    elbow.add(fore);
-    // 灰绿色手掌（宽扁）+ 五根分明手指（中指最长、拇指粗短，自然扇开）
-    const palm = mesh(new THREE.SphereGeometry(0.14, 10, 8), mSlaHand, 0, -0.66, 0.04);
-    palm.scale.set(1.3, 0.9, 0.85);
-    elbow.add(palm);
-    [[-0.105, 0.11], [-0.052, 0.14], [0, 0.15], [0.052, 0.13], [0.105, 0.10]].forEach(([fx, L], fi) => {
-      const fg = mesh(new THREE.CapsuleGeometry(fi === 0 ? 0.042 : 0.036, L, 3, 8), mSlaHand, fx, -0.80 - L / 2, 0.06);
-      fg.rotation.z = fx * 1.2; // 五指沿掌缘自然扇开
-      elbow.add(fg);
+    arm.position.set(ax, 1.58, 0.14); // 肩关节埋入躯干肩侧（该高度躯干表面 x≈0.75 之内）
+    arm.rotation.z = sd * 0.92; // 单节直臂：向左右两侧斜向外展开（约 53°）
+    arm.rotation.x = 0.32;      // 略向前伸
+    // 肩球：过渡鼓包内嵌躯干肩侧表面（顺滑连接不穿帮），外覆臂根
+    const shoulder = mesh(new THREE.SphereGeometry(0.19, 12, 10), mSlaBody, sd * 0.02, 0.03, 0.01);
+    const limb = mesh(new THREE.CapsuleGeometry(0.125, 0.62, 4, 12), mSlaBody, 0, -0.38, 0); // 直臂一节到底
+    // 灰绿色手掌（宽扁）+ 五根分明手指（中指最长、拇指粗短，沿臂向自然扇开）
+    const palm = mesh(new THREE.SphereGeometry(0.14, 10, 8), mSlaHand, 0, -0.84, 0.03);
+    palm.scale.set(1.25, 0.85, 0.75);
+    [[-0.11, 0.13], [-0.055, 0.16], [0, 0.17], [0.055, 0.15], [0.11, 0.12]].forEach(([fx, L], fi) => {
+      const fg = mesh(new THREE.CapsuleGeometry(fi === 0 ? 0.040 : 0.034, L, 3, 8), mSlaHand, fx, -0.97 - L / 2, 0.05);
+      fg.rotation.z = fx * 1.4; // 五指沿掌缘自然扇开
+      arm.add(fg);
     });
-    arm.add(upper, elbow);
+    arm.add(shoulder, limb, palm);
     arm.userData.baseZ = arm.rotation.z;
     F.slaArms.push(arm);
     sp.add(arm);
@@ -2720,9 +2735,9 @@ function animateSlaBody(t, moving, mode) {
     B.rotation.z = moving ? Math.sin(frog.walkPhase) * 0.05 : 0;
     B.rotation.x = frog.flinch > 0 ? -0.26 * (frog.flinch / 0.25) : 0; // 受击后仰
     F.slaMouth.scale.set(1, 1, 1);
-    // 手臂：招架基姿小幅晃动（肘弯固定，架势恒定）
-    F.slaArms[0].rotation.set(0.30 + Math.sin(t * (moving ? 7 : 2.2)) * (moving ? 0.15 : 0.05), 0, -0.85 - Math.sin(t * 2.2) * 0.05);
-    F.slaArms[1].rotation.set(0.30 - Math.sin(t * (moving ? 7 : 2.2)) * (moving ? 0.15 : 0.05), 0, 0.85 + Math.sin(t * 2.2) * 0.05);
+    // 手臂：单节直臂外展基姿小幅晃动（斜向外展开架势恒定）
+    F.slaArms[0].rotation.set(0.32 + Math.sin(t * (moving ? 7 : 2.2)) * (moving ? 0.15 : 0.05), 0, -0.92 - Math.sin(t * 2.2) * 0.05);
+    F.slaArms[1].rotation.set(0.32 - Math.sin(t * (moving ? 7 : 2.2)) * (moving ? 0.15 : 0.05), 0, 0.92 + Math.sin(t * 2.2) * 0.05);
     // 腿：蹲姿交替小步（摆幅收小防脚底波动；踝动态补偿脚掌平放）
     const ls = moving ? Math.sin(frog.walkPhase) * 0.12 : Math.sin(t * 2.2) * 0.03;
     F.slaLegs[0].rotation.x = -1.05 + ls;
