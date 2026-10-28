@@ -1991,8 +1991,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     F.mouseEyes.push(eye);
     F.mousePupils.push(pu);
   });
-  // 嘴：细微笑弧延长至与瞳孔间距等宽并上移（弧角 0.55π；z 转 1.225π 弧中点朝正下，左右对称）
-  F.mouseMouth = mesh(new THREE.TorusGeometry(0.30, 0.016, 6, 18, Math.PI * 0.55), mMouth, 0, 1.65, 0.55);
+  // 嘴：细微笑弧延长至与瞳孔间距等宽、再上抬贴近眼睛；整体前移补齐中间被脸面吞掉的弧线（弧角 0.55π、z 转 1.225π 对称）
+  F.mouseMouth = mesh(new THREE.TorusGeometry(0.30, 0.016, 6, 18, Math.PI * 0.55), mMouth, 0, 1.72, 0.58);
   F.mouseMouth.rotation.set(-0.3, 0, Math.PI * 1.225);
   mb.add(F.mouseMouth);
   // 手臂：圆台（肩粗掌细渐变柱）拼接圆润圆掌（参考图手套状无分指）
