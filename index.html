@@ -1858,7 +1858,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
 (function buildFrog() {
   /* 奶蛋（参考图）配色：香草蛋黄体 + 绿虹膜黑瞳 + 棕灰细嘴 */
   const mBody = std(0xeed98f), mBelly = std(0xfaf0c8), mDark = std(0x3a2c14), mWhite = std(0xffffff), mSpot = std(0xdcc377);
-  const mIrisG = std(0x55843a, { roughness: 0.4 });                // 绿虹膜（微光泽）
+  const mIrisG = std(0x2e6b1f, { roughness: 0.4 });                // 深绿虹膜（微光泽）
   const mPup   = std(0x141414, { roughness: 0.25 });               // 黑瞳
   const mMouth = std(0x6e5c46, { roughness: 0.55 });               // 棕灰嘴弧
   const mGlint = new THREE.MeshBasicMaterial({ color: 0xffffff }); // 高光点（无 emissive，勿入 F.mats）
