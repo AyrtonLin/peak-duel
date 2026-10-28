@@ -1014,7 +1014,7 @@ const PCFG = {
   bodyR: 0.72, bodyY: 1.02,      // 躯干半径 / 中心高
   headR: 0.50, headY: 1.88,      // 头部半径 / 中心高（Q版大头）
   eyeSize: 1.0,                  // 眼睛整体缩放
-  earLen: 1.35, earTilt: 0.15,   // 耳朵长度倍率 / 外倾角（弧度）——参考图长圆耳
+  earLen: 1.15, earTilt: 0.12,   // 耳朵长度倍率 / 外倾角（弧度）——参考图对称长圆耳
   helmetSize: 1.0,               // 头盔整体缩放
   vestThick: 0.075,              // 背心壳与躯干间隙（背心厚度）
   pouchCount: 3,                 // 胸前弹匣袋数量
@@ -1165,10 +1165,10 @@ const P_HEAD_Y = PCFG.headY;
       hs.add(cap);
       hs.add(mesh(new THREE.BoxGeometry(0.1, 0.15, 0.08), mBlack, sd * 0.66, -0.2, 0.02)); // PTT/线缆盒
     });
-    // 麦克风：左耳罩出发的弯臂延伸至鼻头旁（球珠链 + 泡棉黑头）
-    const micPts = bez3([-0.66, -0.02, 0.14], [-0.58, -0.3, 0.52], [-0.2, -0.22, 0.61], 7);
+    // 麦克风：左耳罩出发的弯臂延伸至鼻头旁（球珠链 + 泡棉黑头，全程避开鼻头体积）
+    const micPts = bez3([-0.66, -0.02, 0.14], [-0.6, -0.32, 0.52], [-0.23, -0.25, 0.61], 7);
     for (let i = 0; i < micPts.length - 1; i++) hs.add(limb(micPts[i], micPts[i + 1], 0.014, 0.014, mStrap));
-    const foam = mesh(new THREE.SphereGeometry(0.04, 10, 8), mFoam, -0.2, -0.215, 0.635);
+    const foam = mesh(new THREE.SphereGeometry(0.04, 10, 8), mFoam, -0.23, -0.25, 0.635);
     foam.scale.set(1.1, 0.9, 1.25);
     hs.add(foam);
     return hs;
@@ -1224,6 +1224,24 @@ const P_HEAD_Y = PCFG.headY;
     sideDev.add(mesh(new THREE.BoxGeometry(0.03, 0.06, 0.1), mBlack, -0.05, 0.05, 0.02));
     sideDev.add(mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.05, 8), mBlack, -0.04, -0.08, 0.06));
     helm.add(sideDev);
+    // 顶部十字织带 ×2（前后向 + 左右向，贴壳外缘）
+    const topBand = (rotY) => {
+      const tb = mesh(new THREE.TorusGeometry(0.56, 0.02, 6, 20, Math.PI), mStrap, 0, 0, 0.01);
+      tb.rotation.y = rotY;
+      tb.scale.set(1.05, 0.92, 1.05);
+      helm.add(tb);
+    };
+    topBand(0);                       // 左右向（耳间跨顶）
+    topBand(Math.PI / 2);             // 前后向（ NVG 座 ↔ 后脑）
+    // 后顶盖板 + 铆钉 ×2（参考图后脑装备感）
+    const rearPlate = mesh(new THREE.BoxGeometry(0.15, 0.045, 0.2), mGear, 0, 0.4, -0.26);
+    rearPlate.rotation.x = 0.5;
+    helm.add(rearPlate);
+    [-0.05, 0.05].forEach(dx => {
+      const rv = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.02, 8), mBuckle, dx, 0.435, -0.19);
+      rv.rotation.x = 0.5;
+      helm.add(rv);
+    });
     P.head.add(helm);
   })();
 
@@ -1265,21 +1283,22 @@ const P_HEAD_Y = PCFG.headY;
   P.armR = buildArm(1);
   visual.add(P.armL, P.armR);
 
-  /* ---------- createTail：参考图大尾巴（粗根后伸、中段后甩、末段上翘内勾） ---------- */
+  /* ---------- createTail：参考图大尾巴（粗根后伸、中段后甩、末段内勾，多节点平滑） ---------- */
   (function createTail() {
     const tail = new THREE.Group();
-    tail.position.set(0, 0.8, -0.4);
+    tail.position.set(0, 0.78, -0.45);
     const w = PCFG.tailCurve;
     const pts = [
-      [0, -0.1, 0.15],            // 根部埋入躯干
-      [0, 0.0, -0.32 * w],
-      [0, 0.3, -0.6 * w],
-      [0, 0.62, -0.72 * w],
-      [0, 0.88, -0.5 - 0.12 * w]  // 尾尖内勾上翘
+      [0, -0.1, 0.13],
+      [0, -0.02, -0.2],
+      [0, 0.14, -0.48],
+      [0, 0.36, -0.66],
+      [0, 0.62, -0.7],
+      [0, 0.84, -0.55]
     ];
-    const radii = [0.24, 0.21, 0.17, 0.12, 0.075];
+    const radii = [0.22, 0.205, 0.185, 0.155, 0.115, 0.07];
     for (let i = 0; i < pts.length - 1; i++) tail.add(limb(pts[i], pts[i + 1], radii[i], radii[i + 1], mShade));
-    tail.add(mesh(new THREE.SphereGeometry(0.24, 12, 10), mShade, pts[0][0], pts[0][1], pts[0][2]));
+    tail.add(mesh(new THREE.SphereGeometry(0.22, 12, 10), mShade, pts[0][0], pts[0][1], pts[0][2]));
     P.tail = tail;
     visual.add(tail);
   })();
@@ -1417,24 +1436,24 @@ const P_HEAD_Y = PCFG.headY;
   P.flashLight.position.copy(P.muzzle.position);
   P.gun.add(P.flashLight);
 
-  /* ---------- 耳朵：参考图长圆耳（近直立、右耳外翻垂弯） ---------- */
+  /* ---------- 耳朵：参考图长圆耳（左右完全对称镜像，耳基从盔沿干净探出） ---------- */
   [-1, 1].forEach(sd => {
     const ear = new THREE.Group();
     const L = PCFG.earLen;
-    ear.position.set(sd * 0.33, 0.28, -0.05);
-    ear.rotation.z = sd * PCFG.earTilt;     // 微外倾
+    ear.position.set(sd * 0.3, 0.42, -0.04);      // 高于壳带在该纬度的横向半径 → 不穿盔体
+    ear.rotation.z = sd * 0.12;                   // 对称微外倾
     ear.rotation.x = -0.04;
-    ear.add(limb([0, 0, 0], [0.0, 0.26 * L, 0.01], 0.14, 0.12, mSkin));            // 厚基部
-    ear.add(limb([0.0, 0.26 * L, 0.01], [sd * 0.03 * L, 0.4 * L, 0.02], 0.12, 0.105, mSkin));
-    if (sd < 0) { // 左耳：直立细长、微外翘
-      ear.add(limb([sd * 0.03 * L, 0.4 * L, 0.02], [-0.06 * L, 0.55 * L, 0.0], 0.105, 0.09, mSkin));
-    } else {      // 右耳：外翻垂弯（参考图标志性形态）
-      ear.add(limb([0.03 * L, 0.4 * L, 0.02], [0.1 * L, 0.5 * L, 0.0], 0.105, 0.095, mSkin));
-      ear.add(limb([0.1 * L, 0.5 * L, 0.0], [0.32 * L, 0.46 * L, 0.0], 0.095, 0.08, mSkin));
-    }
-    // 内耳色斑（前面）
-    const inner = mesh(new THREE.SphereGeometry(0.07, 10, 8), mEarIn, sd * 0.015 * L, 0.3 * L, 0.075);
-    inner.scale.set(0.6, 2.0, 0.45);
+    const pts = [
+      [0, 0, 0],
+      [0, 0.22 * L, 0.005],
+      [sd * 0.05 * L, 0.42 * L, 0.012],
+      [sd * 0.12 * L, 0.55 * L, 0.008],
+      [sd * 0.16 * L, 0.63 * L, 0.005]
+    ];
+    const radii = [0.13, 0.112, 0.098, 0.088, 0.078];
+    for (let i = 0; i < pts.length - 1; i++) ear.add(limb(pts[i], pts[i + 1], radii[i], radii[i + 1], mSkin));
+    const inner = mesh(new THREE.SphereGeometry(0.066, 10, 8), mEarIn, sd * 0.02 * L, 0.3 * L, 0.07);
+    inner.scale.set(0.6, 2.2, 0.45);
     ear.add(inner);
     P.head.add(ear);
   });
