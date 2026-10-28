@@ -1940,8 +1940,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.eggHide = [belly, armL, armR].concat(F.legs, F.backSpots);
   /* —— 奶鼠（二阶段专属模型，参考图 P2）：黄皮大耳小老鼠，root 内独立组 —— */
   const mMouseBody = std(0xffdd70), mEarIn = std(0xffc178), mMouseSpot = std(0xd2b250);
-  const mMouseIris = std(0xd4e29c, { roughness: 0.38 }); // 浅黄绿虹膜圈（参考图眼色，不影响奶蛋深绿眼）
-  F.mats.push(mMouseBody, mEarIn, mMouseSpot, mMouseIris); // 红闪 emissive 同步
+  F.mats.push(mMouseBody, mEarIn, mMouseSpot); // 红闪 emissive 同步（mMouseIris 已弃用：奶鼠眼改用奶蛋同款深绿 mIrisG）
   const mmouse = new THREE.Group();
   F.mouse = mmouse;
   root.add(mmouse);
@@ -1954,8 +1953,9 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       const t = (y + 1) / 2;
-      // 梨形：下腹宽圆、上部为加宽的大头（头身一体顺滑、无凹角）
-      const k = 0.98 - 0.28 * Math.pow(Math.max(0.001, (t - 0.05) / 0.95), 1.5);
+      // 梨形 + 微脖颈：上收大头的基线上，颈处轻凹出一点脖子，头部再微鼓更圆滑（都不过度）
+      const u = Math.max(0.001, (t - 0.05) / 0.95);
+      const k = 0.98 - 0.28 * Math.pow(u, 1.5) - 0.035 * Math.exp(-Math.pow((t - 0.72) / 0.05, 2)) + 0.06 * Math.exp(-Math.pow((t - 0.86) / 0.11, 2));
       const ny = y + 0.09 * Math.exp(-Math.pow((y + 1) / 0.26, 2)); // 底部微平
       pos.setXYZ(i, x * k, ny, z * k);
     }
@@ -1982,8 +1982,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   // 眼睛：浅黄绿虹膜圈 + 大黑瞳 + 高光（原尺寸 2/3，深嵌头部曲面）
   F.mouseEyes = []; F.mousePupils = [];
   [[-0.22], [0.22]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.1, 14, 12), mMouseIris, ex, 1.58, 0.58);
-    const pu = mesh(new THREE.SphereGeometry(0.055, 10, 8), mPup, 0, 0.003, 0.05);
+    const eye = mesh(new THREE.SphereGeometry(0.1, 14, 12), mIrisG, ex, 1.58, 0.58);
+    const pu = mesh(new THREE.SphereGeometry(0.072, 10, 8), mPup, 0, 0.003, 0.05);
     pu.add(mesh(new THREE.SphereGeometry(0.016, 6, 6), mGlint, -0.016, 0.02, 0.038));
     eye.add(pu);
     mb.add(eye);
