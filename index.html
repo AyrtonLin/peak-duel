@@ -2063,6 +2063,170 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   F.mouseParts = [mmouse];
   mmouse.visible = false;
+  /* —— 奶斯拉（三阶段专属模型，参考图 P3）：巨型黄色哥斯拉态怪兽，root 内独立组 —— */
+  const mSlaBody = std(0xf7c94b, { roughness: 0.52 });
+  const mSlaBelly = std(0xfff2d8, { roughness: 0.62 });
+  const mSlaCream = std(0xfff8ea, { roughness: 0.55 });
+  F.mats.push(mSlaBody, mSlaBelly, mSlaCream); // 受击红闪同步（索引 11/12/13）
+  const sla = new THREE.Group();
+  F.sla = sla;
+  root.add(sla);
+  const sp = new THREE.Group(); // 姿态组：呼吸/摆动整体作用
+  sla.add(sp);
+  F.slaPose = sp;
+  // 躯干：宽大厚实哥斯拉态（顶点变形球，肩窄臀宽、腹部前凸）
+  const slaBodyGeo = new THREE.SphereGeometry(1, 28, 22);
+  {
+    const ps = slaBodyGeo.attributes.position;
+    for (let i = 0; i < ps.count; i++) {
+      const x = ps.getX(i), y = ps.getY(i), z = ps.getZ(i);
+      const tt = (y + 1) / 2;
+      const k = 1.06 - 0.3 * Math.pow(Math.max(0.001, (tt - 0.08) / 0.92), 1.5); // 底宽上收（宽肩雏形）
+      const front = z > 0 ? 1.06 : 1.0; // 腹部略前鼓
+      ps.setXYZ(i, x * k, y, z * k * front);
+    }
+    slaBodyGeo.computeVertexNormals();
+  }
+  const sTorso = new THREE.Mesh(slaBodyGeo, mSlaBody);
+  sTorso.position.set(0, 1.02, 0);
+  sTorso.scale.set(0.86, 1.0, 0.88);
+  sp.add(sTorso);
+  // 腹部：独立浅奶油色曲面网格，前凸体积（埋入躯干内，边界自然过渡）
+  const sBelly = mesh(new THREE.SphereGeometry(0.66, 22, 18), mSlaBelly, 0, 0.95, 0.5);
+  sBelly.scale.set(0.85, 0.95, 0.72);
+  sp.add(sBelly);
+  F.slaBellyMesh = sBelly;
+  // 颈部（粗）+ 头部（前伸），与躯干融合
+  const sNeck = mesh(new THREE.SphereGeometry(0.32, 16, 12), mSlaBody, 0, 1.78, 0.12);
+  sNeck.scale.set(1.15, 0.9, 1);
+  sp.add(sNeck);
+  const sHead = mesh(new THREE.SphereGeometry(0.46, 20, 16), mSlaBody, 0, 2.06, 0.28);
+  sHead.scale.set(0.95, 0.88, 1.05);
+  sp.add(sHead);
+  F.slaHead = sHead;
+  // 吻部（轻微前伸的卡通口鼻）
+  const sMuzzle = mesh(new THREE.SphereGeometry(0.24, 14, 12), mSlaBody, 0, 1.94, 0.62);
+  sMuzzle.scale.set(1.15, 0.62, 0.9);
+  sp.add(sMuzzle);
+  // 眼睛：独立鲜绿虹膜 + 黑瞳 + 高光，独立对象
+  const mSlaIris = std(0x4f9a33, { roughness: 0.35 });
+  F.mats.push(mSlaIris); // 受击红闪同步（索引 14）
+  F.slaEyes = []; F.slaPupils = [];
+  [[-0.2], [0.2]].forEach(([ex]) => {
+    const eye = mesh(new THREE.SphereGeometry(0.155, 14, 12), mSlaIris, ex, 2.1, 0.62);
+    const pu = mesh(new THREE.SphereGeometry(0.09, 10, 8), mPup, 0, 0.01, 0.085);
+    pu.add(mesh(new THREE.SphereGeometry(0.028, 6, 6), mGlint, -0.026, 0.034, 0.08));
+    eye.add(pu);
+    sp.add(eye);
+    F.slaEyes.push(eye);
+    F.slaPupils.push(pu);
+  });
+  // 嘴：简洁卡通嘴（深棕短弧，微张可放奶泡）
+  F.slaMouth = mesh(new THREE.SphereGeometry(0.1, 12, 10), std(0x4a3018, { roughness: 0.8 }), 0, 1.78, 0.74);
+  F.slaMouth.scale.set(1.5, 0.45, 0.3);
+  sp.add(F.slaMouth);
+  // 手臂：粗壮圆润（肩部植入躯干），前臂体积变化 + 宽手掌 + 短指
+  F.slaArms = [];
+  [[-1, -0.78], [1, 0.78]].forEach(([sd, ax]) => {
+    const arm = new THREE.Group();
+    arm.position.set(ax, 1.62, 0.16);
+    arm.rotation.z = -sd * 0.5;    // 微张
+    arm.rotation.x = 0.35;         // 略向前伸
+    const upper = mesh(new THREE.CapsuleGeometry(0.2, 0.34, 4, 12), mSlaBody, 0, -0.24, 0);
+    upper.scale.set(1.05, 1, 1.0);
+    const fore = mesh(new THREE.CapsuleGeometry(0.22, 0.22, 4, 12), mSlaBody, 0, -0.56, 0.08);
+    fore.scale.set(1.08, 1, 1.05);
+    arm.add(upper, fore);
+    // 手掌（宽扁）+ 三根短指
+    const palm = mesh(new THREE.SphereGeometry(0.19, 10, 8), mSlaBody, 0, -0.82, 0.12);
+    palm.scale.set(1.15, 0.8, 0.95);
+    arm.add(palm);
+    [[-0.11], [0], [0.11]].forEach(([fx], fi) => {
+      const fg = mesh(new THREE.CapsuleGeometry(0.055, 0.1, 3, 8), mSlaBody, fx, -0.98, 0.16 + fi * 0.02);
+      arm.add(fg);
+    });
+    arm.userData.baseZ = arm.rotation.z;
+    F.slaArms.push(arm);
+    sp.add(arm);
+  });
+  // 腿：粗壮大腿下沉，脚掌宽大 + 独立脚趾
+  F.slaLegs = [];
+  [[-1, -0.44], [1, 0.44]].forEach(([sd, lx]) => {
+    const leg = new THREE.Group();
+    leg.position.set(lx, 0.52, 0.02);
+    leg.rotation.x = 0.15; // 大腿略前跨
+    const thigh = mesh(new THREE.CapsuleGeometry(0.26, 0.34, 4, 12), mSlaBody, 0, -0.22, 0);
+    thigh.scale.set(1.1, 1, 1.05);
+    const calf = mesh(new THREE.CapsuleGeometry(0.2, 0.18, 4, 10), mSlaBody, 0, -0.62, 0.02);
+    leg.add(thigh, calf);
+    // 宽脚掌 + 三根脚趾（独立建模）
+    const foot = mesh(new THREE.SphereGeometry(0.24, 12, 10), mSlaBody, 0, -0.76, 0.12);
+    foot.scale.set(1.0, 0.36, 1.5);
+    leg.add(foot);
+    [[-0.13], [0], [0.13]].forEach(([tx], ti) => {
+      const toe = mesh(new THREE.SphereGeometry(0.075, 8, 6), mSlaBody, tx, -0.82, 0.44 - ti * 0.035);
+      toe.scale.set(0.9, 0.62, 1.1);
+      leg.add(toe);
+    });
+    F.slaLegs.push(leg);
+    sp.add(leg);
+  });
+  // 尾巴：粗壮后弯 + 末端上翘（Tube 根粗尾细，pivot 在尾根）
+  const slaTailPivot = new THREE.Group();
+  slaTailPivot.position.set(0, 0.78, -0.86);
+  F.slaTailPivot = slaTailPivot;
+  const sTailPts = [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0.05, -0.12, -0.62),
+    new THREE.Vector3(0.28, -0.18, -1.15),
+    new THREE.Vector3(0.52, -0.06, -1.52),
+    new THREE.Vector3(0.58, 0.14, -1.72)
+  ];
+  const sTailCurve = new THREE.CatmullRomCurve3(sTailPts);
+  const sTailGeo = new THREE.TubeGeometry(sTailCurve, 30, 0.3, 10, false);
+  {
+    const ps = sTailGeo.attributes.position;
+    const sgm = 30, rd = 10;
+    for (let idx = 0; idx < ps.count; idx++) {
+      const s = Math.floor(idx / (rd + 1));
+      const u = s / sgm;
+      const c = sTailCurve.getPointAt(u);
+      const fac = 1 - 0.68 * u; // 根 0.3 → 末 0.1
+      ps.setXYZ(idx, c.x + (ps.getX(idx) - c.x) * fac, c.y + (ps.getY(idx) - c.y) * fac, c.z + (ps.getZ(idx) - c.z) * fac);
+    }
+    sTailGeo.computeVertexNormals();
+  }
+  slaTailPivot.add(new THREE.Mesh(sTailGeo, mSlaBody));
+  sp.add(slaTailPivot);
+  // 背部奶油状凸起：奶白色圆润波浪隆脊，从颈后沿脊背排列到尾根（错落大小/高低）
+  F.slaBumps = [];
+  const bumpMat = mSlaCream;
+  [[0, 2.28, -0.3, 0.16], [0.06, 2.1, -0.52, 0.19], [-0.05, 1.86, -0.68, 0.23], [0.08, 1.56, -0.78, 0.27],
+   [-0.08, 1.24, -0.82, 0.24], [0.05, 0.98, -0.86, 0.19], [0, 0.82, -0.9, 0.15]].forEach((b, bi) => {
+    const bump = new THREE.Group();
+    bump.position.set(b[0], b[1], b[2]);
+    // 每个凸起 = 3 个重叠奶球，形成圆润卷曲的奶油丘
+    blob(bump, b[3] * 1.15, b[3] * 0.9, b[3] * 1.25, bumpMat);
+    blob(bump, b[3] * 0.75, b[3] * 0.6, b[3] * 0.7, bumpMat, b[3] * 0.55, b[3] * 0.45, -b[3] * 0.3);
+    blob(bump, b[3] * 0.5, b[3] * 0.42, b[3] * 0.45, bumpMat, -b[3] * 0.5, b[3] * 0.3, b[3] * 0.45);
+    sp.add(bump);
+    F.slaBumps.push(bump);
+  });
+  function blob(bg, rx, ry, rz, mat, ox, oy, oz) {
+    const m = mesh(new THREE.SphereGeometry(1, 12, 10), mat, ox || 0, oy || 0, oz || 0);
+    m.scale.set(rx, ry, rz);
+    bg.add(m);
+  }
+  // 背部斑凸（奶斯拉保留背部无敌提示）
+  F.slaSpots = [];
+  [[-0.5, 1.42, -0.72], [0.45, 1.28, -0.76], [0, 1.55, -0.68]].forEach(p => {
+    const spc = mesh(new THREE.SphereGeometry(0.13, 8, 6), mMouseSpot, p[0], p[1], p[2]);
+    spc.scale.set(1, 0.5, 0.55);
+    sp.add(spc);
+    F.slaSpots.push(spc);
+  });
+  F.slaParts = [sla];
+  sla.visible = false;
   // 二阶段：奶酪皇冠
   F.crown = new THREE.Group();
   const cheeseMat = std(0xffd54f, { roughness: 0.6 });
@@ -2137,25 +2301,25 @@ function applyFrogPhase(n) {
   frog.hitR = CONFIG.enemy.hitRadius[n - 1];
   frog.phase = n;
   // 该阶段有 GLB 模型则隐藏程序化占位部件，否则用占位模型
-  // 三模型分层：一阶奶蛋（蛋体·无四肢）／二阶奶鼠（黄色大耳小老鼠）／三阶奶斯拉（白胖蛋＋四肢＋光环）
+  // 三模型分层：一阶奶蛋（蛋体·无四肢）／二阶奶鼠（黄色大耳小老鼠）／三阶奶斯拉（哥斯拉态怪兽）
   const hasGlb = !!(Models.frogHolders && Models.frogHolders[n - 1]);
-  if (n === 2) {
-    F.mouse.visible = !hasGlb;   // 二阶换装奶鼠
-    F.procParts.forEach(p => { p.visible = false; }); // 蛋体整套隐藏
-    F.crown.position.set(0, 1.99, 0.06); // 皇冠改坐奶鼠头顶
+  F.mouse.visible = (n === 2) && !hasGlb;
+  F.sla.visible = (n === 3) && !hasGlb;
+  if (n === 1) {
+    F.procParts.forEach(p => { p.visible = !hasGlb && !(F.eggHide.indexOf(p) >= 0); });
   } else {
-    F.mouse.visible = false;
-    F.procParts.forEach(p => { p.visible = !hasGlb && !(n === 1 && F.eggHide.indexOf(p) >= 0); });
-    F.crown.position.set(0, 2.06, 0.1);
+    F.procParts.forEach(p => { p.visible = false; }); // 二/三阶用专属模型，蛋体整套隐藏
   }
   F.crown.visible = !hasGlb && n >= 2;
-  F.brows.forEach(b => { b.visible = !hasGlb && n >= 3; });
-  F.aura.visible = !hasGlb && n >= 3;
+  F.crown.position.set(0, n === 2 ? 1.99 : n === 3 ? 2.34 : 2.06, n === 2 ? 0.06 : n === 3 ? 0.24 : 0.1);
+  if (n === 3) F.crown.rotation.z = 0.12; else F.crown.rotation.z = 0; // 歪戴皇冠
+  F.brows.forEach(b => { b.visible = !hasGlb && n >= 3 && !F.sla.visible; });
+  F.aura.visible = !hasGlb && n >= 3 && !F.sla.visible;
   Models.frogHolders.forEach((h, i) => { if (h) h.visible = (i === n - 1); });
   if (n === 3) F.pupils.forEach(p => { p.material = std(0xffc23a, { emissive: 0xcc7700 }); });
   // 嘴前锚点/蓄力球随当前模型面部高度（root 坐标）
-  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : 1.3, n === 2 ? 0.95 : 1.05);
-  F.chargeOrb.position.set(0, n === 2 ? 1.56 : 1.3, n === 2 ? 1.02 : 1.14);
+  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 1.7 : 1.3, n === 2 ? 0.95 : n === 3 ? 0.92 : 1.05);
+  F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 1.7 : 1.3, n === 2 ? 1.02 : n === 3 ? 1.02 : 1.14);
   dom.enName.textContent = FROG_NAMES[n - 1];
   dom.phaseTag.textContent = ['一阶段', '二阶段', '三阶段'][n - 1];
   dom.enImg.src = IMG['P' + n];
@@ -2300,6 +2464,11 @@ function deathAnimFrog(dt) {
   F.pupils.forEach(p => p.scale.set(1.5, 1.5, 0.25));
   F.eyeL.scale.y = F.eyeR.scale.y = 0.35;
   F.mouth.scale.set(1.4, 1.8, 1);
+  if (F.sla && F.sla.visible) { // 奶斯拉死亡表情
+    F.slaEyes[0].scale.y = F.slaEyes[1].scale.y = 0.35;
+    F.slaPupils.forEach(p => p.scale.set(1.5, 1.5, 0.25));
+    F.slaMouth.scale.set(1.8, 1.5, 1);
+  }
   if (!frog.starsDone && frog.deathT > 0.4) {
     frog.starsDone = true;
     Particles.spawn(frog.pos.x, 1.6, frog.pos.z, 18, { color: 0xffe27a, color2: 0xffffff, speed: 4, up: 2.5, life: 1.2, grav: 3 });
@@ -2309,6 +2478,7 @@ function deathAnimFrog(dt) {
 function animateFrog(dt, moving, mode) {
   const t = performance.now() / 1000;
   if (frog.phase === 2) { animateMouseBody(t, moving, mode); return; } // 二阶奶鼠独立动画
+  if (frog.phase === 3 && F.sla.visible) { animateSlaBody(t, moving, mode); return; } // 三阶奶斯拉独立动画
   if (mode === 'laugh') {
     const b = Math.abs(Math.sin(t * 9));
     F.body.scale.set(1.12, 0.88 + b * 0.12, 1.12);
@@ -2445,6 +2615,84 @@ function animateMouseBody(t, moving, mode) {
   // 奶鼠受击红闪与蛋体一致
   F.mats.forEach(m => m.emissive.setHex(frog.flinch > 0 ? 0x5a4010 : 0x000000));
 }
+function animateSlaBody(t, moving, mode) {
+  const B = F.slaPose;
+  if (mode === 'laugh') {
+    // 捧腹大笑（声波施放）：张嘴喷奶泡 + 肚子大幅起伏
+    const b = Math.abs(Math.sin(t * 9));
+    B.scale.set(1.08, 0.92 + b * 0.09, 1.08);
+    B.position.y = b * 0.18;
+    B.rotation.z = Math.sin(t * 9) * 0.05;
+    B.rotation.x = 0.05;
+    F.slaArms[0].rotation.set(0.3 + Math.sin(t * 9) * 0.45, 0, 1.15 + Math.sin(t * 9) * 0.25);
+    F.slaArms[1].rotation.set(0.3 + Math.sin(t * 9) * 0.45, 0, -1.15 - Math.sin(t * 9) * 0.25);
+    F.slaMouth.scale.set(2.0, 1.7, 1);
+    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = 0.15;
+  } else if (mode === 'castRay') {
+    // 后仰蓄力
+    F.slaArms[0].rotation.set(-0.6, 0, 1.3);
+    F.slaArms[1].rotation.set(-0.6, 0, -1.3);
+    B.scale.set(1.05, 1 + Math.sin(t * 6) * 0.03, 1.05);
+    B.position.y = 0.04;
+    B.rotation.z = 0;
+    B.rotation.x = -0.08;
+    F.slaMouth.scale.set(1.6, 1.1, 1);
+    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = 0.15;
+  } else if (mode === 'repel') {
+    // 战吼：张臂前倾
+    F.slaArms[0].rotation.set(-1.0, 0, 1.7);
+    F.slaArms[1].rotation.set(-1.0, 0, -1.7);
+    B.scale.set(1.12, 0.95, 1.14);
+    B.position.y = 0.03 + Math.sin(t * 16) * 0.03;
+    B.rotation.z = 0;
+    B.rotation.x = 0.12;
+    F.slaMouth.scale.set(1.8, 1.4, 1);
+    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = 0.15;
+  } else if (mode === 'castCheese') {
+    // 投掷摆动
+    F.slaArms[0].rotation.set(Math.sin(t * 5) * 0.3, 0, 2.2);
+    F.slaArms[1].rotation.set(Math.sin(t * 5) * 0.3, 0, -2.2);
+    B.scale.set(1 + Math.sin(t * 5) * 0.04, 1 + Math.sin(t * 5) * 0.05, 1);
+    B.position.y = Math.abs(Math.sin(t * 5)) * 0.14;
+    B.rotation.z = 0;
+    B.rotation.x = 0;
+    F.slaMouth.scale.set(1.5, 1.1, 1);
+    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = 0;
+  } else {
+    // —— 常规：厚重呼吸（腹部起伏）+ 重量感走路 + 瞳孔追踪 ——
+    const br = Math.sin(t * (moving ? 6.5 : 2.2)) * (moving ? 0.05 : 0.028);
+    B.scale.set(1 + br * 0.4, 1 + br * 0.55, 1 + br);
+    B.position.y = moving ? Math.abs(Math.sin(frog.walkPhase)) * 0.08 : 0;
+    B.rotation.z = moving ? Math.sin(frog.walkPhase) * 0.05 : 0;
+    B.rotation.x = frog.flinch > 0 ? -0.26 * (frog.flinch / 0.25) : 0; // 受击后仰
+    F.slaMouth.scale.set(1, 1, 1);
+    // 手臂：自然下垂微摆 / 走路摆臂
+    F.slaArms[0].rotation.set(0.35 + Math.sin(t * (moving ? 7 : 2.2)) * (moving ? 0.3 : 0.08), 0, 0.5 + Math.sin(t * 2.2) * 0.05);
+    F.slaArms[1].rotation.set(0.35 - Math.sin(t * (moving ? 7 : 2.2)) * (moving ? 0.3 : 0.08), 0, -0.5 - Math.sin(t * 2.2) * 0.05);
+    // 腿：交替迈步（跺地感：抬起侧身体已由 bob 抬升）
+    const ls = moving ? Math.sin(frog.walkPhase) * 0.42 : Math.sin(t * 2.2) * 0.04;
+    F.slaLegs[0].rotation.x = 0.15 + ls;
+    F.slaLegs[1].rotation.x = 0.15 - ls;
+    // 瞳孔追踪（与蛋/奶鼠同公式）
+    _v1.copy(player.pos).sub(frog.pos); _v1.y = 0;
+    const sl = _v1.length() || 1;
+    const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / sl;
+    const px = clamp(side, -1, 1) * 0.08;
+    F.slaPupils[0].position.set(px, 0.01, 0.1);
+    F.slaPupils[1].position.set(px, 0.01, 0.1);
+  }
+  // 尾巴摆动（厚重慢摆）
+  const tp = moving ? t * 7 : t * 2.6;
+  F.slaTailPivot.rotation.y = Math.sin(tp) * (moving ? 0.22 : 0.13);
+  F.slaTailPivot.rotation.x = Math.sin(tp * 0.55) * 0.05;
+  // 背脊奶油凸起轻微晃动（逐个错相，奶冻感）
+  F.slaBumps.forEach((b, i) => {
+    const jj = Math.sin(t * (moving ? 11 : 3.4) + i * 0.9) * (moving ? 0.1 : 0.045);
+    b.rotation.x = jj;
+    b.position.y = (b.userData.baseY === undefined ? (b.userData.baseY = b.position.y) : b.userData.baseY) + Math.sin(t * 3.4 + i * 0.9) * 0.012;
+  });
+  F.mats.forEach(m => m.emissive.setHex(frog.flinch > 0 ? 0x5a4010 : 0x000000));
+}
 function updateFrog(dt) {
   if (frog.dead) { deathAnimFrog(dt); F.root.position.x = frog.pos.x; F.root.position.z = frog.pos.z; return; }
   frog.center.set(frog.pos.x, CONFIG.enemy.hitHeight[frog.phase - 1] * frog.baseScale, frog.pos.z);
@@ -2455,6 +2703,7 @@ function updateFrog(dt) {
   const blink = frog.blinkT < 0.13;
   F.eyeL.scale.y = F.eyeR.scale.y = blink ? 0.15 : 1;
   if (F.mouseEyes) F.mouseEyes[0].scale.y = F.mouseEyes[1].scale.y = blink ? 0.15 : 1; // 奶鼠同步眨眼
+  if (F.slaEyes && F.sla.visible) F.slaEyes[0].scale.y = F.slaEyes[1].scale.y = blink ? 0.15 : 1; // 奶斯拉同步眨眼
   if (frog.state === 'stun') {
     frog.stunT -= dt;
     const k = Math.max(0, frog.stunT) / ec.transformStun;
@@ -2703,6 +2952,8 @@ function updateWaveCast(c, dt) {
       Shake.add(0.55);
       game.fovKick = 1;
       Particles.spawn(frog.pos.x, 0.6, frog.pos.z, 26, { color: 0xffffff, color2: 0xd8ecff, speed: 9, up: 0.8, life: 0.6, grav: 2, drag: 1.5 });
+      F.mouthAnchor.getWorldPosition(_v2);
+      Particles.spawn(_v2.x, _v2.y, _v2.z, 22, { color: 0xffffff, color2: 0xfff4dc, speed: 7.5, up: 1.8, life: 0.85, grav: 3.5, drag: 1.2 }); // 此乃奶斯拉喷吐的奶泡
       Shockwaves.spawn(frog.pos.x, frog.pos.z, 0xffffff, 4.5, 0.5);
       F.waveRings[1].visible = false;
     }
