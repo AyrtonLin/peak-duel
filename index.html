@@ -1940,7 +1940,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.eggHide = [belly, armL, armR].concat(F.legs, F.backSpots);
   /* —— 奶鼠（二阶段专属模型，参考图 P2）：黄皮大耳小老鼠，root 内独立组 —— */
   const mMouseBody = std(0xffdd70), mEarIn = std(0xffc178), mMouseSpot = std(0xd2b250);
-  F.mats.push(mMouseBody, mEarIn, mMouseSpot); // 红闪 emissive 同步（索引 8/9/10）
+  const mMouseIris = std(0xd4e29c, { roughness: 0.38 }); // 浅黄绿虹膜圈（参考图眼色，不影响奶蛋深绿眼）
+  F.mats.push(mMouseBody, mEarIn, mMouseSpot, mMouseIris); // 红闪 emissive 同步
   const mmouse = new THREE.Group();
   F.mouse = mmouse;
   root.add(mmouse);
@@ -1953,7 +1954,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       const t = (y + 1) / 2;
-      const k = 1.0 - 0.36 * Math.pow(Math.max(0.001, (t - 0.04) / 0.96), 1.15); // 底宽上圆
+      // 梨形：下腹宽圆、向上顺滑收窄成小头（头身一体无凹角，去葫芦腰）
+      const k = 0.98 - 0.4 * Math.pow(Math.max(0.001, (t - 0.05) / 0.95), 1.2);
       const ny = y + 0.09 * Math.exp(-Math.pow((y + 1) / 0.26, 2)); // 底部微平
       pos.setXYZ(i, x * k, ny, z * k);
     }
@@ -1963,10 +1965,10 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   mTorso.position.set(0, 1.04, 0);
   mTorso.scale.set(0.94, 0.96, 1.02);
   mb.add(mTorso);
-  // 大圆耳：外侧黄色厚盘 + 内侧浅橙凹耳（前后错层实现凹陷感）
-  [[-0.58, 0.32], [0.58, -0.32]].forEach(([ex, tilts], idx) => {
+  // 大圆耳：外侧黄色厚盘 + 内侧浅橙凹耳（小头顶两侧，前后错层实现凹陷感）
+  [[-0.34, 0.34], [0.34, -0.34]].forEach(([ex, tilts], idx) => {
     const ear = new THREE.Group();
-    ear.position.set(ex, 1.86, -0.03);
+    ear.position.set(ex, 1.82, -0.03);
     ear.rotation.z = tilts;      // 向外略斜
     ear.rotation.x = -0.12;      // 稍向后仰
     const outer = mesh(new THREE.SphereGeometry(0.52, 18, 14), mMouseBody, 0, 0, 0);
@@ -1977,67 +1979,58 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     mb.add(ear);
     if (idx === 0) F.mouseEarL = ear; else F.mouseEarR = ear;
   });
-  // 眼睛：绿虹膜 + 黑瞳 + 高光，略突出面颊（S 形面颊上）
+  // 眼睛：浅黄绿虹膜圈 + 大黑瞳 + 高光（参考图放大版，半嵌小头面）
   F.mouseEyes = []; F.mousePupils = [];
-  [[-0.21], [0.21]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.16, 14, 12), mIrisG, ex, 1.6, 0.8);
-    const pu = mesh(new THREE.SphereGeometry(0.11, 10, 8), mPup, 0, 0.01, 0.1);
-    pu.add(mesh(new THREE.SphereGeometry(0.03, 6, 6), mGlint, -0.028, 0.038, 0.085));
+  [[-0.22], [0.22]].forEach(([ex]) => {
+    const eye = mesh(new THREE.SphereGeometry(0.15, 14, 12), mMouseIris, ex, 1.58, 0.52);
+    const pu = mesh(new THREE.SphereGeometry(0.082, 10, 8), mPup, 0, 0.005, 0.1);
+    pu.add(mesh(new THREE.SphereGeometry(0.024, 6, 6), mGlint, -0.032, 0.04, 0.065));
     eye.add(pu);
     mb.add(eye);
     F.mouseEyes.push(eye);
     F.mousePupils.push(pu);
   });
-  // 嘴：小巧细长微笑弧（深棕细线，贴面颊前倾）
-  F.mouseMouth = mesh(new THREE.TorusGeometry(0.15, 0.026, 6, 14, Math.PI * 0.75), mMouth, 0, 1.38, 0.9);
+  // 嘴：小巧细长微笑弧（深棕细线，贴小头面）
+  F.mouseMouth = mesh(new THREE.TorusGeometry(0.15, 0.026, 6, 14, Math.PI * 0.75), mMouth, 0, 1.36, 0.74);
   F.mouseMouth.rotation.set(-0.3, 0, Math.PI + 0.16);
   mb.add(F.mouseMouth);
-  // 手臂：短圆柱腕 + 掌 + 指凸（左手奉天挥手姿势，右手自然下垂）
+  // 手臂：圆台（肩粗掌细渐变柱）拼接圆润圆掌（参考图手套状无分指）
   F.mouseArms = [];
-  [['armL', -0.66, 2.25], ['armR', 0.66, -0.3]].forEach(([key, ax, az0], ai) => {
+  [['armL', -0.58, -2.35], ['armR', 0.58, -0.3]].forEach(([key, ax, az0], ai) => {
     const arm = new THREE.Group();
-    arm.position.set(ax, 1.36, 0.14);
+    arm.position.set(ax, 1.34, 0.12);
     arm.rotation.z = az0;
-    const limb = mesh(new THREE.CapsuleGeometry(0.125, 0.3, 4, 10), mMouseBody, 0, -0.17, 0);
+    const limb = mesh(new THREE.CylinderGeometry(0.15, 0.1, 0.42, 12), mMouseBody, 0, -0.24, 0); // 圆台臂：肩端粗、掌端细
     arm.add(limb);
-    // 手掌（厚扁球）+ 两根小指凸
-    const palm = mesh(new THREE.SphereGeometry(0.16, 10, 8), mMouseBody, 0, -0.38, 0);
-    palm.scale.set(1, 1.2, 0.6);
+    const palm = mesh(new THREE.SphereGeometry(0.145, 12, 10), mMouseBody, 0, -0.5, 0); // 圆掌与臂端无缝拼接
+    palm.scale.set(1, 1.1, 0.72);
     arm.add(palm);
-    const f1 = mesh(new THREE.CapsuleGeometry(0.045, 0.12, 3, 8), mMouseBody, -0.07, -0.52, 0);
-    f1.rotation.z = -0.35;
-    const f2 = mesh(new THREE.CapsuleGeometry(0.045, 0.12, 3, 8), mMouseBody, 0.07, -0.52, 0);
-    f2.rotation.z = 0.35;
-    arm.add(f1, f2);
     arm.userData.baseZ = az0;
     F.mouseArms.push(arm);
     mb.add(arm);
   });
-  // 腿：短圆柱 + 宽厚脚（脚掌扁球压平，稳定落地）
+  // 腿：矮粗圆柱短腿（参考图：无独立脚掌，圆钝柱底直接落地）
   F.mouseLegs = [];
-  [[-0.36], [0.36]].forEach(([lx]) => {
+  [[-0.3], [0.3]].forEach(([lx]) => {
     const leg = new THREE.Group();
-    leg.position.set(lx, 0.42, 0.1);
-    const limb = mesh(new THREE.CapsuleGeometry(0.155, 0.2, 4, 10), mMouseBody, 0, -0.12, 0);
+    leg.position.set(lx, 0.33, 0.06);
+    const limb = mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.32, 14), mMouseBody, 0, -0.16, 0); // 矮粗圆柱
     leg.add(limb);
-    const foot = mesh(new THREE.SphereGeometry(0.26, 12, 10), mMouseBody, 0, -0.3, 0.14);
-    foot.scale.set(1, 0.42, 1.25);
-    foot.position.y = -0.28;
-    leg.add(foot);
     F.mouseLegs.push(leg);
     mb.add(leg);
   });
-  // 尾巴：CatmullRomCurve3 + TubeGeometry（根部粗末细，末端上翘，pivot 在尾根可摆动）
+  // 尾巴：CatmullRomCurve3 + TubeGeometry（细长渐细，尾部末端上翘，pivot 深入躯干内保无缝）
   const tailPivot = new THREE.Group();
-  tailPivot.position.set(0, 0.62, -0.82);
+  tailPivot.position.set(0, 0.55, -0.7); // 植入体内：尾根被躯干包裹，无断开缝隙
   const tailPts = [
     new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(0.1, -0.2, -0.5),
-    new THREE.Vector3(0.42, -0.26, -0.82),
-    new THREE.Vector3(0.85, -0.08, -0.86)
+    new THREE.Vector3(0.06, -0.05, -0.55),
+    new THREE.Vector3(0.26, 0.02, -1.05),
+    new THREE.Vector3(0.52, 0.18, -1.38),
+    new THREE.Vector3(0.62, 0.38, -1.5)
   ];
   const tailCurve = new THREE.CatmullRomCurve3(tailPts);
-  const tailGeo = new THREE.TubeGeometry(tailCurve, 26, 0.075, 8, false);
+  const tailGeo = new THREE.TubeGeometry(tailCurve, 26, 0.055, 8, false); // 细长
   { // 管径按弧长渐细：逐环向曲线中心收缩
     const pos = tailGeo.attributes.position;
     const seg = 26, radial = 8;
@@ -2045,7 +2038,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
       const s = Math.floor(idx / (radial + 1));
       const u = s / seg;
       const c = tailCurve.getPointAt(u);
-      const fac = 1 - 0.6 * u; // 根粗尾细
+      const fac = 1 - 0.65 * u; // 根粗尾细
       pos.setXYZ(idx, c.x + (pos.getX(idx) - c.x) * fac, c.y + (pos.getY(idx) - c.y) * fac, c.z + (pos.getZ(idx) - c.z) * fac);
     }
     tailGeo.computeVertexNormals();
@@ -2053,9 +2046,9 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.mouseTailPivot = tailPivot;
   tailPivot.add(new THREE.Mesh(tailGeo, mMouseBody));
   mb.add(tailPivot);
-  // 背部斑凸（奶鼠保留背部无敌提示）
+  // 背部斑凸（奶鼠保留背部无敌提示；贴梨形腰背曲面）
   F.mouseSpots = [];
-  [[-0.4, 1.25, -0.98], [0.35, 1.38, -0.88], [0, 1.05, -1.04]].forEach(p => {
+  [[-0.3, 1.2, -0.72], [0.28, 1.35, -0.67], [0, 1.02, -0.84]].forEach(p => {
     const sp = mesh(new THREE.SphereGeometry(0.15, 8, 6), mMouseSpot, p[0], p[1], p[2]);
     sp.scale.set(1, 0.5, 0.55);
     mb.add(sp);
@@ -2318,8 +2311,8 @@ function applyFrogPhase(n) {
   Models.frogHolders.forEach((h, i) => { if (h) h.visible = (i === n - 1); });
   if (n === 3) F.pupils.forEach(p => { p.material = std(0xffc23a, { emissive: 0xcc7700 }); });
   // 嘴前锚点/蓄力球随当前模型面部高度（root 坐标）
-  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 1.7 : 1.3, n === 2 ? 0.95 : n === 3 ? 0.92 : 1.05);
-  F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 1.7 : 1.3, n === 2 ? 1.02 : n === 3 ? 1.02 : 1.14);
+  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 1.7 : 1.3, n === 2 ? 0.82 : n === 3 ? 0.92 : 1.05);
+  F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 1.7 : 1.3, n === 2 ? 0.9 : n === 3 ? 1.02 : 1.14);
   dom.enName.textContent = FROG_NAMES[n - 1];
   dom.phaseTag.textContent = ['一阶段', '二阶段', '三阶段'][n - 1];
   dom.enImg.src = IMG['P' + n];
@@ -2554,13 +2547,13 @@ function animateMouseBody(t, moving, mode) {
     B.position.y = b * 0.24;
     B.rotation.z = Math.sin(t * 9) * 0.06;
     B.rotation.x = 0;
-    F.mouseArms[0].rotation.set(Math.sin(t * 9) * 0.5, 0, 2.25 + Math.sin(t * 9) * 0.3);
-    F.mouseArms[1].rotation.set(Math.sin(t * 9) * 0.5, 0, -2.2 - Math.sin(t * 9) * 0.3);
+    F.mouseArms[0].rotation.set(Math.sin(t * 9) * 0.5, 0, -2.35 + Math.sin(t * 9) * 0.3);
+    F.mouseArms[1].rotation.set(Math.sin(t * 9) * 0.5, 0, 2.2 + Math.sin(t * 9) * 0.3);
     F.mouseMouth.scale.set(1.3, 1.5, 1.05);
     F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
   } else if (mode === 'castRay') {
-    F.mouseArms[0].rotation.set(-0.5, 0, 2.25);
-    F.mouseArms[1].rotation.set(-0.5, 0, -2.0);
+    F.mouseArms[0].rotation.set(-0.5, 0, -2.35);
+    F.mouseArms[1].rotation.set(-0.5, 0, 2.0);
     B.scale.set(1.05, 1 + Math.sin(t * 6) * 0.03, 1.05);
     B.position.y = 0.05;
     B.rotation.z = 0;
@@ -2568,8 +2561,8 @@ function animateMouseBody(t, moving, mode) {
     F.mouseMouth.scale.set(1.15, 1.3, 1.1);
     F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
   } else if (mode === 'repel') {
-    F.mouseArms[0].rotation.set(-1.1, 0, 1.4);
-    F.mouseArms[1].rotation.set(-1.1, 0, -1.4);
+    F.mouseArms[0].rotation.set(-1.1, 0, -1.2);
+    F.mouseArms[1].rotation.set(-1.1, 0, 1.2);
     B.scale.set(1.1, 0.95, 1.12);
     B.position.y = 0.03 + Math.sin(t * 16) * 0.03;
     B.rotation.z = 0;
@@ -2577,8 +2570,8 @@ function animateMouseBody(t, moving, mode) {
     F.mouseMouth.scale.set(1.2, 1.35, 1.1);
     F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
   } else if (mode === 'castCheese') {
-    F.mouseArms[0].rotation.set(Math.sin(t * 5) * 0.3, 0, 2.5);
-    F.mouseArms[1].rotation.set(Math.sin(t * 5) * 0.3, 0, -2.5);
+    F.mouseArms[0].rotation.set(Math.sin(t * 5) * 0.3, 0, -2.6);
+    F.mouseArms[1].rotation.set(Math.sin(t * 5) * 0.3, 0, 2.6);
     B.scale.set(1 + Math.sin(t * 5) * 0.04, 1 + Math.sin(t * 5) * 0.05, 1);
     B.position.y = Math.abs(Math.sin(t * 5)) * 0.16;
     B.rotation.z = 0;
@@ -2588,7 +2581,7 @@ function animateMouseBody(t, moving, mode) {
   } else {
     // —— 常规：呼吸起伏 + 挥手待机/走路划腿 + 瞳孔追踪 ——
     const wave = mode === 'idle' ? 1 : 0; // 保留：菜单即 idle
-    F.mouseArms[0].rotation.set(Math.sin(t * 3.1) * 0.16, 0, 2.25 + Math.sin(t * 3.1) * 0.14); // 左手常挥
+    F.mouseArms[0].rotation.set(Math.sin(t * 3.1) * 0.16, 0, -2.35 + Math.sin(t * 3.1) * 0.14); // 左手常挥（向外举起可见）
     F.mouseArms[1].rotation.set(Math.sin(t * 2.2) * 0.12 + (moving ? Math.sin(t * 7) * 0.25 : 0), 0, -0.3 - (moving ? Math.sin(t * 7) * 0.2 : 0));
     F.mouseMouth.scale.set(1, 1, 1);
     const br = Math.sin(t * (moving ? 7 : 2.4)) * (moving ? 0.06 : 0.03);
@@ -2604,8 +2597,8 @@ function animateMouseBody(t, moving, mode) {
     const dLen = _v1.length() || 1;
     const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / dLen;
     const px = clamp(side, -1, 1) * 0.09;
-    F.mousePupils[0].position.set(px, 0.01, 0.1);
-    F.mousePupils[1].position.set(px, 0.01, 0.1);
+    F.mousePupils[0].position.set(px, 0.005, 0.1);
+    F.mousePupils[1].position.set(px, 0.005, 0.1);
   }
   // 尾巴独立摆动：走快 / 站慢
   const tSpeed = moving ? t * 9 : t * 3.2;
