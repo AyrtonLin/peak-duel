@@ -2096,61 +2096,69 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const sp = new THREE.Group(); // 姿态组：呼吸/摆动整体作用
   slaBase.add(sp);
   F.slaPose = sp;
-  // 躯干：梨形（顶点变形球：上窄下宽，下腹+臀一体外凸圆弧，弧底圆鼓凸出腿间；大腿根部位置不变）
-  const slaBodyGeo = new THREE.SphereGeometry(1, 28, 22);
+  // 身体：单一蛋形整体（头+身一体不分节；顶点变形球：上段为头（蛋顶圆滑收窄）、中下段最宽（腹臀）、
+  // 底部收圆弧（蛋底），上下两半在最宽处一阶连续无折角；大腿根部位置不变）
+  const slaEggTop = 2.47, slaEggBottom = 0.59, slaEggMid = 1.15; // sp 系：蛋顶（头顶）/蛋底（下腹弧底）/最宽处
+  const slaEggH1 = slaEggMid - slaEggTop, slaEggH2 = slaEggMid - slaEggBottom; // 上段半高 1.32 / 下段半高 0.56
+  const slaEggRx = 0.84, slaEggRz = 0.86; // 最宽处 x / z 半径
+  const slaEggShell = (ny) => { // 蛋竖向轮廓系数（蛋顶/蛋底 0 → 最宽处 1，两段椭圆弧拼接、接缝斜率同为 0）
+    const dy = ny - slaEggMid;
+    const h = dy >= 0 ? slaEggH1 : slaEggH2;
+    const q = 1 - (dy / h) * (dy / h);
+    return q > 0 ? Math.sqrt(q) : 0;
+  };
+  const slaEggTT = (ny) => (ny - slaEggBottom) / (slaEggTop - slaEggBottom); // 0 蛋底 → 1 蛋顶
+  const slaEggFront = (ttE) => 1.0 + 0.05 * Math.exp(-Math.pow((ttE - 0.16) / 0.07, 2)); // 前侧下腹微鼓（梨底前弧）
+  const slaEggBack = (ttE) => 1.0 + 0.08 * Math.exp(-Math.pow((ttE - 0.15) / 0.06, 2)); // 后侧臀部外凸（梨底后弧）
+  const slaEggSurf = (X, Y) => { // 蛋形前表面 z（与 sTorso 变形一致，眼/嘴贴面采样用）
+    const sh = slaEggShell(Y);
+    const rz = slaEggRz * sh * slaEggFront(slaEggTT(Y));
+    const rx = slaEggRx * sh;
+    const q = 1 - (X / rx) * (X / rx);
+    return rz * Math.sqrt(Math.max(0, q));
+  };
+  const slaBodyGeo = new THREE.SphereGeometry(1, 36, 44);
   {
     const ps = slaBodyGeo.attributes.position;
     for (let i = 0; i < ps.count; i++) {
       const x = ps.getX(i), y = ps.getY(i), z = ps.getZ(i);
-      const tt = (y + 1) / 2;
-      const k = 1.06 - 0.3 * Math.pow(Math.max(0.001, (tt - 0.08) / 0.92), 1.5); // 梨身：上窄下宽（底最宽）
-      const front = z > 0 ? 1.0 + 0.06 * Math.exp(-Math.pow((tt - 0.35) / 0.22, 2)) : 1.0 + 0.10 * Math.exp(-Math.pow((tt - 0.32) / 0.16, 2)); // 前侧下腹微鼓 + 后侧臀部外凸（梨底弧）
-      let ny = y;
-      if (y < -0.10) { // 下腹+臀部一体外凸圆弧：底部圆鼓下坠（凸出于大腿根下方、腿间可见圆弧，无折叠）
-        const d = -0.10 - y; // 距弧缘深度（0 → 0.90）
-        const u = Math.pow(d / 0.90, 1.3); // 深度权重（单调保序无折叠）
-        ny = -0.10 - 0.33 * u; // 弧底 sp ≈ 0.59，弧缘 sp 0.92
-      }
-      ps.setXYZ(i, x * k, ny, z * k * front);
+      const ny = slaEggTop + (slaEggBottom - slaEggTop) * (y + 1) / 2; // 单位球竖向映射到蛋范围（顶 → 底）
+      const sh = slaEggShell(ny); // 蛋竖向轮廓
+      const rho = Math.sqrt(x * x + z * z); // 单位球横截半径
+      const fb = z > 0 ? slaEggFront(slaEggTT(ny)) : slaEggBack(slaEggTT(ny)); // 前弧 / 后凸
+      const nx = rho > 1e-6 ? (x / rho) * slaEggRx * sh : 0;
+      const nz = rho > 1e-6 ? (z / rho) * slaEggRz * sh * fb : 0;
+      ps.setXYZ(i, nx, ny, nz);
     }
     slaBodyGeo.computeVertexNormals();
   }
   const sTorso = new THREE.Mesh(slaBodyGeo, mSlaBody);
-  sTorso.position.set(0, 1.02, 0);
-  sTorso.scale.set(0.86, 1.0, 0.88);
-  sp.add(sTorso);
-  // 腹部：乳肚板（浅奶油色，前移凸出为梨身前弧；底部与躯干外凸圆弧齐平）
-  const sBellyGeo = new THREE.SphereGeometry(0.66, 22, 18);
+  sp.add(sTorso); // 蛋形一体：头颈身单网格，无分节
+  // 腹部：乳肚贴片（浅奶油色薄壳，沿蛋形前下弧参数化生成：每点贴蛋面外浮 0.015，边缘无缝隙不悬空）
+  const sBellyGeo = new THREE.PlaneGeometry(1, 1, 18, 14);
   {
     const ps = sBellyGeo.attributes.position;
+    const uv = sBellyGeo.attributes.uv;
     for (let i = 0; i < ps.count; i++) {
-      const x = ps.getX(i), y = ps.getY(i);
-      if (y < -0.05) { // 局部 -0.05（sp ≈ 0.875 弧缘）
-        const d = -0.05 - y; // 0 → 0.61
-        const u = Math.pow(d / 0.61, 1.3); // 与躯干同式：外凸圆弧、无折叠
-        ps.setY(i, -0.05 - 0.283 * u); // 弧底 sp ≈ 0.62，与躯干圆弧齐平
-      }
+      const u = uv.getX(i), v = uv.getY(i); // u 横向 0→1，v 竖向下→上
+      const ny = 0.60 + v * 0.85; // 竖跨：蛋底弧上缘（0.60）→ 胸口（1.45）
+      const phi = (u - 0.5) * 1.9; // 横向角 ±0.95 rad（约 ±54°，蛋前侧）
+      const sh = slaEggShell(ny);
+      const fx = slaEggRx * sh * Math.sin(phi);
+      const fz = slaEggRz * sh * slaEggFront(slaEggTT(ny)) * Math.cos(phi) + 0.015; // 贴蛋面外浮
+      ps.setXYZ(i, fx, ny, fz);
     }
     sBellyGeo.computeVertexNormals();
   }
-  const sBelly = mesh(sBellyGeo, mSlaBelly, 0, 0.92, 0.48);
-  sBelly.scale.set(0.80, 0.90, 0.70);
+  const sBelly = new THREE.Mesh(sBellyGeo, mSlaBelly);
   sp.add(sBelly);
   F.slaBellyMesh = sBelly;
-  // 颈部（粗，上移加宽填满头-身缝隙：头→颈→身光滑曲线、梨形轮廓无台阶）+ 头部（前伸）
-  const sNeck = mesh(new THREE.SphereGeometry(0.40, 16, 12), mSlaBody, 0, 1.86, 0.16);
-  sNeck.scale.set(1.2, 1.05, 1.05);
-  sp.add(sNeck);
-  const sHead = mesh(new THREE.SphereGeometry(0.46, 20, 16), mSlaBody, 0, 2.06, 0.28);
-  sHead.scale.set(0.95, 0.88, 1.05);
-  sp.add(sHead);
-  F.slaHead = sHead;
-  // 眼睛：独立鲜绿虹膜 + 黑瞳 + 高光，独立对象
+  // 头部已并入蛋形身体（无独立颈/头件，轮廓连续无分节）；眼睛贴蛋形上段前表面
   const mSlaIris = std(0x4f9a33, { roughness: 0.35 });
   F.mats.push(mSlaIris); // 受击红闪同步（索引 14）
   F.slaEyes = []; F.slaPupils = [];
   [[-0.21], [0.21]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.12, 14, 12), mSlaIris, ex, 2.1, 0.60); // 缩小并深嵌头椭球（突出量约减半）
+    const eye = mesh(new THREE.SphereGeometry(0.12, 14, 12), mSlaIris, ex, 2.1, slaEggSurf(ex, 2.1) - 0.08); // 贴蛋面前坡（深嵌约 0.08）
     const pu = mesh(new THREE.SphereGeometry(0.07, 10, 8), mPup, 0, 0.008, 0.07);
     pu.add(mesh(new THREE.SphereGeometry(0.022, 6, 6), mGlint, -0.02, 0.026, 0.062));
     eye.add(pu);
@@ -2158,20 +2166,16 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     F.slaEyes.push(eye);
     F.slaPupils.push(pu);
   });
-  // 嘴：贴头椭球面的细线微笑弧管（弧度平缓、宽度≈眼距；沿头面逐点采样生成，不穿模不悬浮）
+  // 嘴：贴蛋形前表面的细线微笑弧管（弧度平缓、宽度≈眼距；沿蛋面逐点采样生成，不穿模不悬浮）
   {
     const smileArc = Math.PI * 0.38, smileR = 0.37, cornerY = 1.93, tubeR = 0.022, lift0 = 0.018;
     const mouthYc = cornerY + smileR * Math.cos(smileArc / 2); // 弧圆心（嘴角高度 = cornerY）
-    const headSurf = (X, Y) => { // 头椭球前表面 z（中心(0,2.06,0.28)，半轴 0.437/0.405/0.483，与 sHead 变形一致）
-      const q = 1 - Math.pow(X / 0.437, 2) - Math.pow((Y - 2.06) / 0.405, 2);
-      return 0.28 + 0.483 * Math.sqrt(Math.max(0, q));
-    };
-    const pivotZ = headSurf(0, cornerY) + lift0;
+    const pivotZ = slaEggSurf(0, cornerY) + lift0;
     const pts = [];
     for (let i = 0; i <= 24; i++) {
       const phi = -smileArc / 2 + smileArc * (i / 24);
       const ax = smileR * Math.sin(phi), ay = mouthYc - smileR * Math.cos(phi);
-      pts.push(new THREE.Vector3(ax, ay - cornerY, headSurf(ax, ay) + lift0 - pivotZ));
+      pts.push(new THREE.Vector3(ax, ay - cornerY, slaEggSurf(ax, ay) + lift0 - pivotZ));
     }
     const mpivot = new THREE.Group(); // pivot 在嘴角高度：施法张嘴 scale 就地加深
     mpivot.position.set(0, cornerY, pivotZ);
@@ -2269,8 +2273,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   // 背部奶油状凸起：奶白色圆润波浪隆脊，从颈后沿脊背排列到尾根（错落大小/高低）
   F.slaBumps = [];
   const bumpMat = mSlaCream;
-  [[0, 2.28, -0.3, 0.16], [0.06, 2.1, -0.52, 0.19], [-0.05, 1.86, -0.68, 0.23], [0.08, 1.56, -0.78, 0.27],
-   [-0.08, 1.24, -0.82, 0.24], [0.05, 0.98, -0.86, 0.19], [0, 0.82, -0.9, 0.15]].forEach((b, bi) => {
+  [[0, 2.28, -0.34, 0.16], [0.06, 2.1, -0.52, 0.19], [-0.05, 1.86, -0.68, 0.23], [0.08, 1.56, -0.78, 0.27],
+   [-0.08, 1.24, -0.82, 0.24], [0.05, 0.98, -0.82, 0.19], [0, 0.82, -0.76, 0.15]].forEach((b, bi) => {
     const bump = new THREE.Group();
     bump.position.set(b[0], b[1], b[2]);
     // 每个凸起 = 3 个重叠奶球，形成圆润卷曲的奶油丘
