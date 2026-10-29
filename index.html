@@ -2300,38 +2300,26 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   // 尾端封口球帽：半径 0.14 ≥ Tube 末环半径 0.42×0.32=0.134，盖住末端口无切面（近身端深埋体内无需处理）
   slaTailPivot.add(mesh(new THREE.SphereGeometry(0.14, 12, 10), mSlaBody, 0.58, 0.22, -1.96));
   sp.add(slaTailPivot);
-  // 背部白色鳞片：沿脊背从尾根（尾管两侧环绕）铺到后脑勺，并向左右两侧展开（交错网格，不铺满侧腹）；
-  // 逐枚解析贴合躯干背面（中心=背面表面点径向内嵌，厚轴对齐径向）；凸起感强：径向厚 + 浅内嵌（大半球隆起）
+  // 背部白色鳞片：仅沿背部中轴线一条直线（从尾根上方沿脊背到后脑勺），其他区域无鳞；
+  // 凸起感强：径向厚 + 浅内嵌（大半球隆起于体表）；首枚与尾管上沿咬合衔接（延伸至尾巴根部）
   F.slaBumps = [];
   const bumpMat = mSlaCream;
-  const slaScaleRows = [ // [行高 spY, 鳞半径 r, 角度列表 a（自背中轴左右展开）]
-    [1.55, 0.185, [-0.88, -0.60, 0.60, 0.88]], // 尾根行：中轴让位粗尾管，两侧环绕尾根（延伸至尾巴）
-    [1.70, 0.175, [-0.88, -0.62, 0.62, 0.88]], // 管侧行：中轴仍避让（尾管表面最高≈1.81），近侧角外推开管面
-    [1.85, 0.166, [0, -0.38, 0.38, -0.66, 0.66]], // 中轴行起（中轴枚与尾管上沿咬合衔接；近侧角避开管面）
-    [2.00, 0.157, [-0.88, -0.44, 0.44, 0.88]],
-    [2.15, 0.148, [0, -0.22, 0.22, -0.66, 0.66]],
-    [2.30, 0.139, [-0.88, -0.44, 0.44, 0.88]],
-    [2.45, 0.130, [0, -0.22, 0.22, -0.66, 0.66]],
-    [2.60, 0.121, [0, -0.44, 0.44, -0.66, 0.66]], // 头部行（已收窄，侧向角收小）
-    [2.72, 0.112, [0]] // 后脑勺顶行（头已收窄，仅中轴一枚）
+  const slaScaleRows = [ // [行高 spY, 鳞半径 r]（仅中轴线 a=0 单列一条直线；首行贴尾根、末行到后脑勺）
+    [1.85, 0.170], [2.00, 0.161], [2.14, 0.152], [2.29, 0.143], [2.43, 0.134], [2.58, 0.126], [2.72, 0.118]
   ];
-  slaScaleRows.forEach(([rowY, r, angles]) => {
+  slaScaleRows.forEach(([rowY, r]) => {
     const ys = slaMinv(rowY), k = slaMk((ys + 1) / 2), hk = slaHeadK(rowY);
     const rs = Math.sqrt(Math.max(0, 1 - ys * ys));
-    const rx = slaMS * slaMXZ * 0.94 * k * hk * rs, rz = slaMS * slaMXZ * 1.02 * k * hk * rs; // 该行横截面半轴（含头部收缩）
-    const d = 0.06 * r; // 径向浅内嵌（凸起鳞：外露 0.56r 隆起于体表，非低伏贴面）
-    const fz = slaHeadZ(rowY); // 头部行随头前移（spY<2.02 恒 0）
-    angles.forEach(a => {
-      const scaleGrp = new THREE.Group(); // 鳞组：动画 rotation.x 抖动 + baseY 浮动（契约不变；rotation.y 不被动画覆写）
-      scaleGrp.position.set((rx - d) * Math.sin(a), rowY, -(rz - d) * Math.cos(a) + fz); // 背面表面点 + 径向内嵌 + 头部前移
-      const plate = mesh(new THREE.SphereGeometry(1, 12, 10), bumpMat, 0, 0, 0);
-      plate.scale.set(0.85 * r, 0.68 * r, 0.62 * r); // 凸起椭球鳞：横向窄 / 纵向高 / 径向厚（隆起感）
-      plate.rotation.y = -a; // 厚轴（局部 z）对齐体表径向（凸起方向沿法向伸出）
-      scaleGrp.add(plate);
-      scaleGrp.userData.baseY = rowY;
-      sp.add(scaleGrp);
-      F.slaBumps.push(scaleGrp);
-    });
+    const rz = slaMS * slaMXZ * 1.02 * k * hk * rs; // 该行背中轴半轴（含头部收缩）
+    const d = 0.06 * r; // 径向浅内嵌（凸起鳞：外露 0.56r 隆起，非低伏贴面）
+    const scaleGrp = new THREE.Group(); // 鳞组：动画 rotation.x 抖动 + baseY 浮动（契约不变）
+    scaleGrp.position.set(0, rowY, -(rz - d) + slaHeadZ(rowY)); // 背中轴表面点 + 内嵌 + 头部前移
+    const plate = mesh(new THREE.SphereGeometry(1, 12, 10), bumpMat, 0, 0, 0);
+    plate.scale.set(0.85 * r, 0.68 * r, 0.62 * r); // 凸起椭球鳞：横向窄 / 纵向高 / 径向厚（隆起感）
+    scaleGrp.add(plate); // 中轴处厚轴（局部 z）即体表径向，无需旋转
+    scaleGrp.userData.baseY = rowY;
+    sp.add(scaleGrp);
+    F.slaBumps.push(scaleGrp);
   });
   F.slaParts = [sla];
   sla.visible = false;
