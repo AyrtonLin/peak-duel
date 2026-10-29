@@ -2209,19 +2209,17 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     F.slaEyes.push(eye);
     F.slaPupils.push(pu);
   });
-  // 嘴：贴蛋形前表面的细线微笑弧管（弧度平缓、宽度≈眼距；沿蛋面逐点采样生成，不穿模不悬浮）
+  // 嘴：贴头面前表面的水平直线嘴管（拉平：无弧度等高线；沿面逐点采样生成，不穿模不悬浮）
   {
-    const smileArc = Math.PI * 0.32, smileR = 0.30, cornerY = 2.40, tubeR = 0.022, lift0 = 0.018;
-    const mouthYc = cornerY + smileR * Math.cos(smileArc / 2); // 弧圆心（嘴角高度 = cornerY；随头部上移）
-    const pivotZ = slaSurf(0, cornerY) + lift0;
+    const mouthW = 0.145, mouthY = 2.40, tubeR = 0.022, lift0 = 0.018; // 拉平：嘴角 x 不变、弧度归零（直线等高）
+    const pivotZ = slaSurf(0, mouthY) + lift0;
     const pts = [];
     for (let i = 0; i <= 24; i++) {
-      const phi = -smileArc / 2 + smileArc * (i / 24);
-      const ax = smileR * Math.sin(phi), ay = mouthYc - smileR * Math.cos(phi);
-      pts.push(new THREE.Vector3(ax, ay - cornerY, slaSurf(ax, ay) + lift0 - pivotZ));
+      const ax = -mouthW + 2 * mouthW * (i / 24); // 水平直线：y 恒 0，z 逐点贴面
+      pts.push(new THREE.Vector3(ax, 0, slaSurf(ax, mouthY) + lift0 - pivotZ));
     }
-    const mpivot = new THREE.Group(); // pivot 在嘴角高度：施法张嘴 scale 就地加深
-    mpivot.position.set(0, cornerY, pivotZ);
+    const mpivot = new THREE.Group(); // pivot 在嘴线高度：施法张嘴 scale 就地展宽/加厚
+    mpivot.position.set(0, mouthY, pivotZ);
     mpivot.add(mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 28, tubeR, 6, false), mMouth, 0, 0, 0));
     F.slaMouth = mpivot;
     sp.add(F.slaMouth);
