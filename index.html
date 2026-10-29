@@ -2108,10 +2108,11 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     return q > 0 ? Math.sqrt(q) : 0;
   };
   const slaEggTT = (ny) => (ny - slaEggBottom) / (slaEggTop - slaEggBottom); // 0 蛋底 → 1 蛋顶
+  const slaEggNeck = (ny) => 1 - 0.26 * Math.exp(-Math.pow((ny - 1.98) / 0.26, 2)); // 头身连接处轻微内收（脖子感）：y≈1.98 收窄谷约 26%，头段随之收窄（头缩小）；高斯平滑无折角
   const slaEggFront = (ttE) => 1.0 + 0.05 * Math.exp(-Math.pow((ttE - 0.16) / 0.07, 2)); // 前侧下腹微鼓（梨底前弧）
   const slaEggBack = (ttE) => 1.0 + 0.08 * Math.exp(-Math.pow((ttE - 0.15) / 0.06, 2)); // 后侧臀部外凸（梨底后弧）
   const slaEggSurf = (X, Y) => { // 蛋形前表面 z（与 sTorso 变形一致，眼/嘴贴面采样用）
-    const sh = slaEggShell(Y);
+    const sh = slaEggShell(Y) * slaEggNeck(Y);
     const rz = slaEggRz * sh * slaEggFront(slaEggTT(Y));
     const rx = slaEggRx * sh;
     const q = 1 - (X / rx) * (X / rx);
@@ -2122,8 +2123,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     const ps = slaBodyGeo.attributes.position;
     for (let i = 0; i < ps.count; i++) {
       const x = ps.getX(i), y = ps.getY(i), z = ps.getZ(i);
-      const ny = slaEggTop + (slaEggBottom - slaEggTop) * (y + 1) / 2; // 单位球竖向映射到蛋范围（顶 → 底）
-      const sh = slaEggShell(ny); // 蛋竖向轮廓
+      const ny = slaEggBottom + (slaEggTop - slaEggBottom) * (y + 1) / 2; // 单位球竖向正向映射（球顶 y=+1 → 蛋顶；方向不翻转，保持三角形绕序/法线朝外）
+      const sh = slaEggShell(ny) * slaEggNeck(ny); // 蛋竖向轮廓 × 颈部内收
       const rho = Math.sqrt(x * x + z * z); // 单位球横截半径
       const fb = z > 0 ? slaEggFront(slaEggTT(ny)) : slaEggBack(slaEggTT(ny)); // 前弧 / 后凸
       const nx = rho > 1e-6 ? (x / rho) * slaEggRx * sh : 0;
@@ -2140,10 +2141,10 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     const ps = sBellyGeo.attributes.position;
     const uv = sBellyGeo.attributes.uv;
     for (let i = 0; i < ps.count; i++) {
-      const u = uv.getX(i), v = uv.getY(i); // u 横向 0→1，v 竖向下→上
+      const u = uv.getX(i), v = uv.getY(i); // u 横向 0→1，v 竖向 0(板底)→1(板顶)
       const ny = 0.60 + v * 0.85; // 竖跨：蛋底弧上缘（0.60）→ 胸口（1.45）
       const phi = (u - 0.5) * 1.9; // 横向角 ±0.95 rad（约 ±54°，蛋前侧）
-      const sh = slaEggShell(ny);
+      const sh = slaEggShell(ny) * slaEggNeck(ny);
       const fx = slaEggRx * sh * Math.sin(phi);
       const fz = slaEggRz * sh * slaEggFront(slaEggTT(ny)) * Math.cos(phi) + 0.015; // 贴蛋面外浮
       ps.setXYZ(i, fx, ny, fz);
