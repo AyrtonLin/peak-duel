@@ -2136,10 +2136,10 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     const q = Math.max(0.05, 1 - slaHeadFlatC * P);
     return slaHeadFlatY + P / q;
   };
-  const slaHeadK = (w) => { // 头部横向收缩因子（sp 2.20→2.48 渐入 ×0.73：头整体再缩窄，颈肩连接处向内收窄、宽度单调无内凹）
+  const slaHeadK = (w) => { // 头部横向收缩×球面鼓起（sp 2.20→2.48 渐入 ×0.73 收窄；2.50 处 +9% 球形鼓起：头面部圆润如球，颈身连接宽度仍单调收窄、无内凹）
     const x = (w - 2.20) / 0.28;
     const s = x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
-    return 1 - 0.27 * s;
+    return (1 - 0.27 * s) * (1 + 0.09 * Math.exp(-Math.pow((w - 2.50) / 0.22, 2))); // 球形鼓起包络（中脸峰值，向颈/头顶平滑衰减）
   };
   const slaHeadFwd = 0.26, slaHeadFwdSpan = 0.55; // 头部前移量 / 渐变跨度（再往前挪）
   const slaHeadZ = (w) => { // 头部前移偏移（sp 系 +Z）：颈基 0 → 头部全量（smoothstep 渐入，颈身连接曲线光滑无折角）
@@ -2410,9 +2410,9 @@ function applyFrogPhase(n) {
   F.aura.visible = !hasGlb && n >= 3 && !F.sla.visible;
   Models.frogHolders.forEach((h, i) => { if (h) h.visible = (i === n - 1); });
   if (n === 3) F.pupils.forEach(p => { p.material = std(0xffc23a, { emissive: 0xcc7700 }); });
-  // 嘴前锚点/蓄力球随当前模型面部高度（root 坐标；三阶随头部前移 +0.20）
-  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.82 : n === 3 ? 0.76 : 1.05);
-  F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.9 : n === 3 ? 0.86 : 1.14);
+  // 嘴前锚点/蓄力球随当前模型面部高度（root 坐标；三阶随头部前移+球面鼓起 +0.23）
+  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.82 : n === 3 ? 0.79 : 1.05);
+  F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.9 : n === 3 ? 0.89 : 1.14);
   dom.enName.textContent = FROG_NAMES[n - 1];
   dom.phaseTag.textContent = ['一阶段', '二阶段', '三阶段'][n - 1];
   dom.enImg.src = IMG['P' + n];
