@@ -2125,7 +2125,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     if (P >= slaLiftSpan * (1 + slaLift)) return slaNeckY + P / (1 + slaLift);
     return slaNeckY + (Math.sqrt(1 + 4 * a * P) - 1) / (2 * a);
   };
-  const slaHeadFlatY = 2.74, slaHeadFlatC = 8.0; // 头顶压平起点 / 压平强度（弧度微回调：平顶保留极低弧度）
+  const slaHeadFlatY = 2.74, slaHeadFlatC = 7.0; // 头顶压平起点 / 压平强度（弧度再微增一点：平顶保留低弧度）
   const slaHeadFlat = (w) => { // 头顶软压平（2.80 以上渐压：圆弧顶→平缓顶；单调连续可逆，顶点聚拢无折痕）
     const P = w - slaHeadFlatY;
     return P <= 0 ? w : slaHeadFlatY + P / (1 + slaHeadFlatC * P);
