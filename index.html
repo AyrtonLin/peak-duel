@@ -2372,7 +2372,7 @@ const FROG_NAMES = ['奶蛋', '奶鼠', '奶斯拉']; // 三阶段模型命名
 const FROG_PHASE_LOOK = [
   { body: 0xeed98f, spot: 0xdcc377, scale: 2.55 },
   { body: 0xe5c859, spot: 0xcfa94e, scale: 2.91 },
-  { body: 0xf2ede7, spot: 0xd8c8a8, scale: 3.3 }
+  { body: 0xf2ede7, spot: 0xd8c8a8, scale: 3.0 } // 三阶整体缩小一点（root 等比：躯干/四肢/冠/锚点同步，脚底贴地不变）
 ];
 function applyFrogPhase(n) {
   const look = FROG_PHASE_LOOK[n - 1];
