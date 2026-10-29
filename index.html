@@ -2097,9 +2097,10 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   slaBase.add(sp);
   F.slaPose = sp;
   // 身体：套用奶鼠的梨形躯干模型并整体放大（同一套顶点变形公式：横向轮廓 k + 竖向重映射 ny + 冠部软限幅）。
-  // 线性放大 slaMS 倍后平移进 sp 系：sp_x = slaMS·0.94·k·x_s，sp_y = slaMY0 + slaMS·(1.04+0.96·ny)，sp_z = slaMS·1.02·k·z_s
-  // （与奶鼠 mTorso 的 position(0,1.04,0)/scale(0.94,0.96,1.02) 完全同源）
+  // 线性放大 slaMS 倍、横向再乘瘦身系数 slaMXZ 后平移进 sp 系：sp_x = slaMS·slaMXZ·0.94·k·x_s，sp_y = slaMY0 + slaMS·(1.04+0.96·ny)，sp_z = slaMS·slaMXZ·1.02·k·z_s
+  // （与奶鼠 mTorso 的 position(0,1.04,0)/scale(0.94,0.96,1.02) 同源；整体变瘦：高度不变、x/z 同比收窄）
   const slaMS = 1.22, slaMY0 = 0.387; // 放大系数 / sp 系 y 偏移（奶鼠底 0.166→sp 0.59、奶鼠顶 1.937→sp 2.75，总高与原蛋一致）
+  const slaMXZ = 0.88; // 横向瘦身系数：x/z 同乘（躯干最宽 0.96→0.85，头/肚/背全轮廓同比变瘦）
   const slaMk = (t) => { // 奶鼠横向轮廓系数（底部宽 0.98 → 肚 0.8 → 颈 0.62 → 头 0.62 → 冠 0.44；颈/冠高斯收窄，梨形下宽上窄）
     const u = Math.max(0.001, (t - 0.05) / 0.95);
     return 0.98 - 0.54 * Math.pow(u, 1.5)
@@ -2122,12 +2123,12 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     }
     return (lo + hi) / 2;
   };
-  const slaSurf = (X, spY) => { // sp 系前表面 z（眼/嘴/贴片采样用；与 sTorso 变形一致）
+  const slaSurf = (X, spY) => { // sp 系前表面 z（眼/嘴/贴片采样用；与 sTorso 变形一致，含横向瘦身）
     const y = slaMinv(spY), k = slaMk((y + 1) / 2);
     const rs = Math.sqrt(Math.max(0, 1 - y * y));
-    const xs = X / (slaMS * 0.94 * k);
+    const xs = X / (slaMS * slaMXZ * 0.94 * k);
     const q = rs * rs - xs * xs;
-    return q > 0 ? slaMS * 1.02 * k * Math.sqrt(q) : 0;
+    return q > 0 ? slaMS * slaMXZ * 1.02 * k * Math.sqrt(q) : 0;
   };
   const slaBodyGeo = new THREE.SphereGeometry(1, 36, 44);
   {
@@ -2137,7 +2138,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
       const t = (y + 1) / 2;
       const k = slaMk(t); // 奶鼠横向轮廓（梨形：下宽上窄、颈/冠高斯收窄）
       const ny = slaMny(y, t); // 奶鼠竖向重映射（正向：球顶 y=+1 → 头顶；方向不翻转，保持三角形绕序/法线朝外）
-      ps.setXYZ(i, slaMS * 0.94 * k * x, slaMy(y), slaMS * 1.02 * k * z);
+      ps.setXYZ(i, slaMS * slaMXZ * 0.94 * k * x, slaMy(y), slaMS * slaMXZ * 1.02 * k * z);
     }
     slaBodyGeo.computeVertexNormals();
   }
@@ -2154,8 +2155,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
       const phi = (u - 0.5) * 1.9; // 横向角 ±0.95 rad（约 ±54°，躯干前侧）
       const y = slaMinv(spY), k = slaMk((y + 1) / 2); // 反解球面高度 → 轮廓系数
       const rs = Math.sqrt(Math.max(0, 1 - y * y)); // 该高度单位球横截半径
-      const fx = slaMS * 0.94 * k * rs * Math.sin(phi);
-      const fz = slaMS * 1.02 * k * rs * Math.cos(phi) + 0.015; // 贴躯干面外浮
+      const fx = slaMS * slaMXZ * 0.94 * k * rs * Math.sin(phi);
+      const fz = slaMS * slaMXZ * 1.02 * k * rs * Math.cos(phi) + 0.015; // 贴躯干面外浮（含瘦身）
       ps.setXYZ(i, fx, spY, fz);
     }
     sBellyGeo.computeVertexNormals();
@@ -2167,8 +2168,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const mSlaIris = std(0x4f9a33, { roughness: 0.35 });
   F.mats.push(mSlaIris); // 受击红闪同步（索引 14）
   F.slaEyes = []; F.slaPupils = [];
-  [[-0.27], [0.27]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.12, 14, 12), mSlaIris, ex, 2.51, slaSurf(ex, 2.51) - 0.08); // 贴放大奶鼠头面前坡（深嵌约 0.08；位置=奶鼠眼位 1.74 放大映射）
+  [[-0.24], [0.24]].forEach(([ex]) => {
+    const eye = mesh(new THREE.SphereGeometry(0.12, 14, 12), mSlaIris, ex, 2.51, slaSurf(ex, 2.51) - 0.08); // 贴瘦身后头面前坡（深嵌约 0.08；横向随瘦身系数内收）
     const pu = mesh(new THREE.SphereGeometry(0.07, 10, 8), mPup, 0, 0.008, 0.07);
     pu.add(mesh(new THREE.SphereGeometry(0.022, 6, 6), mGlint, -0.02, 0.026, 0.062));
     eye.add(pu);
@@ -2197,9 +2198,9 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const mSlaHand = std(0x8b9e82, { roughness: 0.55 });
   F.mats.push(mSlaHand); // 受击红闪同步
   F.slaArms = [];
-  [[-1, -0.73], [1, 0.73]].forEach(([sd, ax]) => {
+  [[-1, -0.64], [1, 0.64]].forEach(([sd, ax]) => {
     const arm = new THREE.Group();
-    arm.position.set(ax, 1.85, 0.14); // 肩关节埋入放大奶鼠躯干肩侧（该高度躯干半宽≈0.85，肩球外缘≈0.94 微露）
+    arm.position.set(ax, 1.85, 0.14); // 肩关节埋入瘦身躯干肩侧（该高度躯干半宽≈0.75，肩球外缘≈0.85 微露）
     arm.rotation.z = sd * 0.92; // 单节直臂：向左右两侧斜向外展开（约 53°）
     arm.rotation.x = 0.32;      // 略向前伸
     // 肩球：过渡鼓包内嵌躯干肩侧表面（顺滑连接不穿帮），外覆臂根
@@ -2283,8 +2284,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   // 背部奶油状凸起：奶白色圆润波浪隆脊，从颈后沿脊背排列到尾根（错落大小/高低）
   F.slaBumps = [];
   const bumpMat = mSlaCream;
-  [[0, 2.5, -0.53, 0.16], [0.06, 2.3, -0.62, 0.19], [-0.05, 2.05, -0.75, 0.23], [0.08, 1.75, -0.92, 0.27],
-   [-0.08, 1.4, -1.0, 0.24], [0.05, 1.05, -0.93, 0.19], [0, 0.9, -0.84, 0.15]].forEach((b, bi) => {
+  [[0, 2.5, -0.46, 0.16], [0.06, 2.3, -0.54, 0.19], [-0.05, 2.05, -0.65, 0.23], [0.08, 1.75, -0.76, 0.27],
+   [-0.08, 1.4, -0.86, 0.24], [0.05, 1.05, -0.81, 0.19], [0, 0.9, -0.73, 0.15]].forEach((b, bi) => {
     const bump = new THREE.Group();
     bump.position.set(b[0], b[1], b[2]);
     // 每个凸起 = 3 个重叠奶球，形成圆润卷曲的奶油丘
@@ -2301,7 +2302,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   }
   // 背部斑凸（奶斯拉保留背部无敌提示）
   F.slaSpots = [];
-  [[-0.5, 1.45, -0.86], [0.45, 1.3, -0.90], [0, 1.6, -0.95]].forEach(p => {
+  [[-0.44, 1.45, -0.78], [0.40, 1.3, -0.82], [0, 1.6, -0.86]].forEach(p => {
     const spc = mesh(new THREE.SphereGeometry(0.13, 8, 6), mMouseSpot, p[0], p[1], p[2]);
     spc.scale.set(1, 0.5, 0.55);
     sp.add(spc);
@@ -2401,8 +2402,8 @@ function applyFrogPhase(n) {
   Models.frogHolders.forEach((h, i) => { if (h) h.visible = (i === n - 1); });
   if (n === 3) F.pupils.forEach(p => { p.material = std(0xffc23a, { emissive: 0xcc7700 }); });
   // 嘴前锚点/蓄力球随当前模型面部高度（root 坐标）
-  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.20 : 1.3, n === 2 ? 0.82 : n === 3 ? 0.74 : 1.05);
-  F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.20 : 1.3, n === 2 ? 0.9 : n === 3 ? 0.86 : 1.14);
+  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.20 : 1.3, n === 2 ? 0.82 : n === 3 ? 0.66 : 1.05);
+  F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.20 : 1.3, n === 2 ? 0.9 : n === 3 ? 0.76 : 1.14);
   dom.enName.textContent = FROG_NAMES[n - 1];
   dom.phaseTag.textContent = ['一阶段', '二阶段', '三阶段'][n - 1];
   dom.enImg.src = IMG['P' + n];
