@@ -2431,7 +2431,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const slaMy = (y) => slaMY0 + slaMS * (1.04 + 0.96 * slaMny(y, (y + 1) / 2)); // 单位球 y → sp 系 y（单调，可二分反解）
   // —— 头部改造：颈基 slaNeckY 以上整体上移（头顶抬高）+ 头部横向收缩（头变小）——
   // 颈下身体完全不动（腿/腹/臂/尾不受影响）；颈身过渡保持平滑渐收（宽度单调收窄，无内凹凹谷）
-  const slaNeckY = 2.02, slaLift = 0.38, slaLiftSpan = 0.55; // 颈基 sp 高度 / 最大拉伸 / 拉伸过渡跨度（头再上移）
+  const slaNeckY = 2.02, slaLift = 0.55, slaLiftSpan = 0.60; // 颈基 sp 高度 / 最大拉伸 / 拉伸过渡跨度（对照参考图：头再抬高）
   const slaHeadY = (y) => y <= slaNeckY ? y : slaNeckY + (y - slaNeckY) * (1 + slaLift * Math.min(1, (y - slaNeckY) / slaLiftSpan)); // 上移映射（单调可逆；头顶 2.75→2.97）
   const slaHeadInv = (w) => { // 上移映射的逆（闭式解）
     const P = w - slaNeckY;
@@ -2451,10 +2451,10 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     const q = Math.max(0.05, 1 - slaHeadFlatC * P);
     return slaHeadFlatY + P / q;
   };
-  const slaHeadK = (w) => { // 头部横向轻微收窄 × 球面鼓起（对照参考图：头大而圆鼓如球；sp 2.20→2.48 渐入仅 ×0.86 收窄；2.52 处 +17% 球形鼓起，包络更宽）
+  const slaHeadK = (w) => { // 头部收缩（对照参考图：头更小）× 球面鼓起（头小而圆鼓；sp 2.20→2.48 渐入 ×0.70 收窄；2.52 处 +17% 球形鼓起）
     const x = (w - 2.20) / 0.28;
     const s = x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
-    return (1 - 0.14 * s) * (1 + 0.17 * Math.exp(-Math.pow((w - 2.52) / 0.30, 2))); // 球形鼓起包络（中脸峰值，向颈/头顶平滑衰减）
+    return (1 - 0.30 * s) * (1 + 0.17 * Math.exp(-Math.pow((w - 2.52) / 0.30, 2))); // 球形鼓起包络（中脸峰值，向颈/头顶平滑衰减）
   };
   const slaHeadFwd = 0.30, slaHeadFwdSpan = 0.55; // 头部前移量 / 渐变跨度（对照参考图：头颅更靠前）
   const slaHeadZ = (w) => { // 头部前移偏移（sp 系 +Z）：颈基 0 → 头部全量（smoothstep 渐入，颈身连接曲线光滑无折角）
@@ -2512,8 +2512,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.mats.push(mSlaIris); // 受击红闪同步（索引 14）
   // （对照参考图微调：小点鼻已按用户要求移除）
   F.slaEyes = []; F.slaPupils = [];
-  [[-0.215], [0.215]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.115, 14, 12), mSlaIris, ex, 2.585, slaSurf(ex, 2.585) - 0.05); // 加大眼（对照参考图：绿环大眼；深嵌约 0.05、随头形收缩/前移自动跟随）
+  [[-0.195], [0.195]].forEach(([ex]) => {
+    const eye = mesh(new THREE.SphereGeometry(0.115, 14, 12), mSlaIris, ex, 2.52, slaSurf(ex, 2.52) - 0.05); // 加大眼（对照参考图：绿环大眼在小头上仍醒目；深嵌约 0.05、随头形收缩/前移自动跟随）
     const pu = mesh(new THREE.SphereGeometry(0.072, 10, 8), mPup, 0, 0.006, 0.055); // 大黑瞳同比放大，微凸虹膜前
     pu.add(mesh(new THREE.SphereGeometry(0.016, 6, 6), mGlint, -0.018, 0.022, 0.05)); // 高光点（对照参考图：油亮大黑瞳 + 白高光；同奶鼠做法）
     eye.add(pu);
@@ -2648,22 +2648,39 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     sp.add(scaleGrp);
     F.slaBumps.push(scaleGrp);
   });
-  // 尾部奶油鳞：贴尾管上缘 5 簇奶油花（由粗到细铺满上缘；并入 F.slaBumps 同享抖动；slaTailPivot 局部坐标）
-  [[0.22, 0.56, -1.04, 0.255], [0.30, 0.54, -1.24, 0.235], [0.38, 0.49, -1.44, 0.215], [0.46, 0.45, -1.64, 0.195], [0.54, 0.41, -1.82, 0.175]].forEach(([lx, ly, lz, r]) => {
-    const scaleGrp = new THREE.Group();
-    scaleGrp.position.set(lx, ly, lz);
-    const plate = mesh(new THREE.SphereGeometry(1, 10, 8), bumpMat, 0, 0, 0);
-    plate.scale.set(0.9 * r, 0.7 * r, 0.6 * r); // 主球（略扁贴尾）
-    scaleGrp.add(plate);
-    [[-0.5, 0.4, -0.25, 0.42], [0.52, 0.34, -0.24, 0.38]].forEach(([lx2, ly2, lz2, lr2]) => {
-      const lobe = mesh(new THREE.SphereGeometry(1, 10, 8), bumpMat, lx2 * r, ly2 * r, lz2 * r);
-      lobe.scale.set(lr2 * r, lr2 * r, lr2 * 0.8 * r); // 双侧瓣
-      scaleGrp.add(lobe);
+  // 尾部奶油鳞：沿尾管曲线逐点采样贴合（切向法向求上缘点位，不再用固定坐标错配）
+  {
+    const upv = new (sTorso.position.constructor)(0, 1, 0);
+    const tang = new (sTorso.position.constructor)();
+    const nrm = new (sTorso.position.constructor)();
+    const cp = new (sTorso.position.constructor)();
+    [[0.46, 0.250], [0.56, 0.230], [0.66, 0.210], [0.76, 0.190], [0.86, 0.170], [0.94, 0.150]].forEach(([u, r], ti) => {
+      sTailCurve.getPointAt(u, cp);
+      sTailCurve.getTangentAt(u, tang);
+      // 上缘法向：把世界"上"投影到与切向垂直的平面 → 尾背方向
+      nrm.copy(upv).addScaledVector(tang, -upv.dot(tang)).normalize();
+      const fac = 1 - 0.68 * u;
+      const rTube = 0.42 * fac; // 该处管半径（与加粗系数一致）
+      const scaleGrp = new THREE.Group();
+      scaleGrp.position.set(
+        cp.x + nrm.x * rTube * 0.55,
+        cp.y + nrm.y * rTube * 0.55,
+        cp.z + nrm.z * rTube * 0.55
+      ); // 半嵌管面（浮出上缘）
+      const plate = mesh(new THREE.SphereGeometry(1, 10, 8), bumpMat, 0, 0, 0);
+      plate.scale.set(0.9 * r, 0.7 * r, 0.6 * r); // 主球（略扁顺尾）
+      scaleGrp.add(plate);
+      [[-0.5, 0.4, 0.40], [0.52, 0.34, 0.38]].forEach(([lt, ly, lr]) => {
+        // 侧瓣：沿切向 ± 与上向微抬
+        const lobe = mesh(new THREE.SphereGeometry(1, 10, 8), bumpMat, tang.x * lt * r, ly * r, tang.z * lt * r);
+        lobe.scale.set(lr * r, lr * r, lr * 0.8 * r);
+        scaleGrp.add(lobe);
+      });
+      scaleGrp.userData.baseY = scaleGrp.position.y; // 尾簇同享动画浮动契约
+      slaTailPivot.add(scaleGrp);
+      F.slaBumps.push(scaleGrp);
     });
-    scaleGrp.userData.baseY = ly; // 尾簇同享动画浮动契约
-    slaTailPivot.add(scaleGrp);
-    F.slaBumps.push(scaleGrp);
-  });
+  }
   F.slaParts = [sla];
   sla.visible = false;
   // 三阶段：金色眉毛 + 光环（贴蛋形轮廓，眉位于眼上前方）
