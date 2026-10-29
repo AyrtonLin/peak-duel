@@ -2451,10 +2451,10 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     const q = Math.max(0.05, 1 - slaHeadFlatC * P);
     return slaHeadFlatY + P / q;
   };
-  const slaHeadK = (w) => { // 头部收缩（对照参考图：头更小）× 球面鼓起（头小而圆鼓；sp 2.20→2.48 渐入 ×0.70 收窄；2.52 处 +17% 球形鼓起）
-    const x = (w - 2.20) / 0.28;
+  const slaHeadK = (w) => { // 头部收缩：自颈基 2.02 宽入缓收（跨度 0.58 至 ×0.70）——对照参考图颈部厚实、头从肩背平滑隆起，无"细颈+球头"台阶；头顶鼓起减弱为 +9%
+    const x = (w - 2.02) / 0.58;
     const s = x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
-    return (1 - 0.30 * s) * (1 + 0.17 * Math.exp(-Math.pow((w - 2.52) / 0.30, 2))); // 球形鼓起包络（中脸峰值，向颈/头顶平滑衰减）
+    return (1 - 0.30 * s) * (1 + 0.09 * Math.exp(-Math.pow((w - 2.45) / 0.32, 2))); // 球形鼓起包络（中脸轻鼓，向颈/头顶平滑衰减）
   };
   const slaHeadFwd = 0.30, slaHeadFwdSpan = 0.55; // 头部前移量 / 渐变跨度（对照参考图：头颅更靠前）
   const slaHeadZ = (w) => { // 头部前移偏移（sp 系 +Z）：颈基 0 → 头部全量（smoothstep 渐入，颈身连接曲线光滑无折角）
@@ -2513,10 +2513,9 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   // （对照参考图微调：小点鼻已按用户要求移除）
   F.slaEyes = []; F.slaPupils = [];
   [[-0.195], [0.195]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.115, 14, 12), mSlaIris, ex, 2.52, slaSurf(ex, 2.52) - 0.05); // 加大眼（对照参考图：绿环大眼在小头上仍醒目；深嵌约 0.05、随头形收缩/前移自动跟随）
-    const pu = mesh(new THREE.SphereGeometry(0.072, 10, 8), mPup, 0, 0.006, 0.055); // 大黑瞳同比放大，微凸虹膜前
-    pu.add(mesh(new THREE.SphereGeometry(0.016, 6, 6), mGlint, -0.018, 0.022, 0.05)); // 高光点（对照参考图：油亮大黑瞳 + 白高光；同奶鼠做法）
-    eye.add(pu);
+    const eye = mesh(new THREE.SphereGeometry(0.085, 14, 12), mSlaIris, ex, 2.64, slaSurf(ex, 2.64) - 0.05); // 缩小眼并上移（对照参考图：小头高位小眼；深嵌约 0.05、随头形收缩/前移自动跟随）
+    const pu = mesh(new THREE.SphereGeometry(0.045, 10, 8), mPup, 0, 0.006, 0.055); // 黑瞳同比缩小，微凸虹膜前（z 0.055 契约不变）
+    eye.add(pu); // （高光点已按用户要求删除）
     sp.add(eye);
     F.slaEyes.push(eye);
     F.slaPupils.push(pu);
