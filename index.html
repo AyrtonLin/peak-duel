@@ -2522,7 +2522,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   // 嘴：贴头面前表面的水平直线嘴管（拉平：无弧度等高线；沿面逐点采样生成，不穿模不悬浮）
   {
-    const mouthW = 0.145, mouthY = 2.50, tubeR = 0.022, lift0 = 0.018; // 拉平直线嘴，随眼上移（眼 2.74/嘴 2.50 保持同距）
+    const mouthW = 0.145, mouthY = 2.60, tubeR = 0.022, lift0 = 0.018; // 拉平直线嘴，再上移贴近眼下（眼 2.74/嘴 2.60）
     const pivotZ = slaSurf(0, mouthY) + lift0;
     const pts = [];
     for (let i = 0; i <= 24; i++) {
