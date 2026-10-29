@@ -1404,19 +1404,334 @@ const P_HEAD_Y = PCFG.headY;
     visual.add(back);
   })();
 
-  /* ---------- 武器（保持枪械契约：P.gun / P.muzzle / 残影剥离 / GLB 挂点） ---------- */
-  const mGun = std(0x2b2b31, { roughness: 0.45, metalness: 0.35 });
-  const mGunD = std(0x141417, { roughness: 0.5, metalness: 0.3 });
+  /* ---------- 武器：黑色科幻步枪（程序化建模 createWeaponModel，与 weapon/ 展示项目同源） ---------- */
+  // 材质集（simple:true —— 游戏无环境贴图，降金属度防死黑；展示项目用 RoomEnvironment 时 metal 0.85）
+  function createWeaponMaterials(opts) {
+    const simple = !!(opts && opts.simple);
+    const metal = simple ? 0.55 : 0.85;
+    return {
+      shell: new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.62, metalness: 0.28 }),
+      panel: new THREE.MeshStandardMaterial({ color: 0x3b4046, roughness: 0.5, metalness: 0.35 }),
+      metal: new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.38, metalness: metal }),
+      grip: new THREE.MeshStandardMaterial({ color: 0x191a1c, roughness: 0.9, metalness: 0.05, bumpMap: makeGripBump(), bumpScale: 0.6 }),
+      bolt: new THREE.MeshStandardMaterial({ color: 0x0b0c0e, roughness: 0.3, metalness: metal }),
+      lens: new THREE.MeshPhysicalMaterial({ color: 0x0a0f16, roughness: 0.06, metalness: 0.2, clearcoat: 1.0, clearcoatRoughness: 0.08, emissive: 0x04070c })
+    };
+  }
+  function makeGripBump() { // 握把点阵防滑凹凸（Canvas 程序生成）
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = '#808080';
+    g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#c8c8c8';
+    for (let j = 0; j < 4; j++) {
+      for (let i = 0; i < 4; i++) {
+        const x = 8 + i * 16 + (j % 2) * 8, y = 8 + j * 16;
+        g.beginPath();
+        g.arc(x, y, 4.2, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(2, 8);
+    return t;
+  }
+  function weaponRRect(cx, cy, w, h, r, PathCls) { // 圆角矩形（Shape 实心 / Path 镂空内孔）
+    const p = new (PathCls || THREE.Shape)();
+    const x = cx - w / 2, y = cy - h / 2;
+    p.moveTo(x + r, y);
+    p.lineTo(x + w - r, y);
+    p.quadraticCurveTo(x + w, y, x + w, y + r);
+    p.lineTo(x + w, y + h - r);
+    p.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    p.lineTo(x + r, y + h);
+    p.quadraticCurveTo(x, y + h, x, y + h - r);
+    p.lineTo(x, y + r);
+    p.quadraticCurveTo(x, y, x + r, y);
+    return p;
+  }
+  function createWeaponModel(opts) { // +Z 枪口 / 原点=握把顶 / 总长 1.47（枪托 -0.41 → 消音器口 1.06）
+    const M = createWeaponMaterials(opts);
+    const gun = new THREE.Group();
+    gun.name = 'SciFiRifle';
+    const AXIS_Y = 0.03;
+    const box = (w, h, d, mat, x, y, z, rx) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z);
+      if (rx) m.rotation.x = rx;
+      return m;
+    };
+    const cyl = (r1, r2, len, mat, x, y, z, seg) => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, seg || 14), mat);
+      m.position.set(x, y, z);
+      m.rotation.x = Math.PI / 2;
+      return m;
+    };
+    const extr = (shape, depth, mat, x, y, z, ry) => {
+      const m = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: depth, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 1, curveSegments: 10 }), mat);
+      m.position.set(x, y, z);
+      if (ry) m.rotation.y = ry;
+      return m;
+    };
+    const silencer = new THREE.Group();
+    silencer.name = 'silencer';
+    {
+      const tube = cyl(0.047, 0.047, 0.3, M.metal, 0, AXIS_Y, 0.895, 18);
+      tube.name = 'silencerTube';
+      silencer.add(tube);
+      [0.79, 0.86, 0.93, 1.0].forEach((z, i) => {
+        const ring = cyl(0.0495, 0.0495, 0.012, M.bolt, 0, AXIS_Y, z, 18);
+        ring.name = 'silencerRing' + (i + 1);
+        silencer.add(ring);
+      });
+      const collar = cyl(0.03, 0.03, 0.06, M.metal, 0, AXIS_Y, 0.73, 12);
+      collar.name = 'silencerCollar';
+      silencer.add(collar);
+      const cap = cyl(0.049, 0.049, 0.016, M.bolt, 0, AXIS_Y, 1.045, 18);
+      cap.name = 'silencerCap';
+      silencer.add(cap);
+      const bore = cyl(0.013, 0.013, 0.006, M.bolt, 0, AXIS_Y, 1.054, 12);
+      bore.name = 'silencerBore';
+      silencer.add(bore);
+    }
+    gun.add(silencer);
+    const barrelG = new THREE.Group();
+    barrelG.name = 'barrel';
+    {
+      const tube = cyl(0.02, 0.02, 0.54, M.metal, 0, AXIS_Y, 0.47, 12);
+      tube.name = 'barrelTube';
+      barrelG.add(tube);
+      const collar = cyl(0.028, 0.028, 0.045, M.bolt, 0, AXIS_Y, 0.585, 12);
+      collar.name = 'barrelCollar';
+      barrelG.add(collar);
+      const gas = box(0.05, 0.035, 0.045, M.panel, 0, 0.022, 0.635);
+      gas.name = 'barrelGasBlock';
+      barrelG.add(gas);
+    }
+    gun.add(barrelG);
+    const handguard = new THREE.Group();
+    handguard.name = 'handguard';
+    {
+      const oct = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.36, 8, 1, false, Math.PI / 8), M.panel);
+      oct.name = 'handguardOctagon';
+      oct.position.set(0, AXIS_Y, 0.38);
+      oct.rotation.x = Math.PI / 2;
+      handguard.add(oct);
+      const rail = box(0.046, 0.014, 0.33, M.panel, 0, 0.085, 0.375);
+      rail.name = 'handguardRail';
+      handguard.add(rail);
+      [0.24, 0.31, 0.38, 0.45, 0.52].forEach((z, i) => {
+        const n = box(0.05, 0.008, 0.012, M.metal, 0, 0.096, z);
+        n.name = 'handguardRailTooth' + (i + 1);
+        handguard.add(n);
+      });
+      [-1, 1].forEach(sd => {
+        [0.26, 0.35, 0.44].forEach((z, i) => {
+          const s = box(0.005, 0.024, 0.06, M.metal, sd * 0.0485, AXIS_Y, z);
+          s.name = (sd < 0 ? 'handguardSlotL' : 'handguardSlotR') + (i + 1);
+          handguard.add(s);
+        });
+      });
+      const slotB = box(0.03, 0.005, 0.28, M.metal, 0, -0.017, 0.38);
+      slotB.name = 'handguardSlotBottom';
+      handguard.add(slotB);
+    }
+    gun.add(handguard);
+    const receiver = new THREE.Group();
+    receiver.name = 'receiver';
+    {
+      const main = box(0.078, 0.11, 0.36, M.shell, 0, 0.035, 0.02);
+      main.name = 'receiverBody';
+      receiver.add(main);
+      const rail = box(0.05, 0.018, 0.3, M.panel, 0, 0.099, 0.02);
+      rail.name = 'receiverRailBase';
+      receiver.add(rail);
+      [-0.11, -0.055, 0.0, 0.055, 0.11, 0.165].forEach((z, i) => {
+        const n = box(0.052, 0.008, 0.014, M.metal, 0, 0.112, z);
+        n.name = 'receiverRailTooth' + (i + 1);
+        receiver.add(n);
+      });
+      [-1, 1].forEach(sd => {
+        const plate = box(0.005, 0.082, 0.24, M.panel, sd * 0.0415, 0.035, 0.01);
+        plate.name = sd < 0 ? 'receiverPanelL' : 'receiverPanelR';
+        receiver.add(plate);
+        const groove = box(0.003, 0.01, 0.2, M.metal, sd * 0.0445, 0.058, 0.01);
+        groove.name = sd < 0 ? 'receiverGrooveL' : 'receiverGrooveR';
+        receiver.add(groove);
+      });
+      const port = box(0.004, 0.028, 0.08, M.metal, 0.0445, 0.024, 0.06);
+      port.name = 'receiverEjectionPort';
+      receiver.add(port);
+      const charging = box(0.026, 0.012, 0.03, M.metal, 0.045, 0.07, -0.13);
+      charging.name = 'receiverChargingHandle';
+      receiver.add(charging);
+      [[-0.115, 0.072], [0.155, 0.072], [-0.115, -0.005], [0.155, -0.005]].forEach((p, i) => {
+        [-1, 1].forEach(sd => {
+          const b = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0065, 0.012, 8), M.bolt);
+          b.rotation.z = Math.PI / 2;
+          b.position.set(sd * 0.0435, p[1], p[0]);
+          b.name = 'receiverBolt' + (i * 2 + (sd < 0 ? 1 : 2));
+          receiver.add(b);
+        });
+      });
+      const frontCap = box(0.062, 0.09, 0.03, M.panel, 0, 0.035, 0.19);
+      frontCap.name = 'receiverFrontCap';
+      receiver.add(frontCap);
+      const rearPlate = box(0.066, 0.1, 0.024, M.panel, 0, 0.035, -0.17);
+      rearPlate.name = 'receiverRearPlate';
+      receiver.add(rearPlate);
+    }
+    gun.add(receiver);
+    const optic = new THREE.Group();
+    optic.name = 'optic';
+    {
+      const post1 = box(0.03, 0.03, 0.026, M.metal, 0, 0.128, -0.02);
+      post1.name = 'opticMountFront';
+      optic.add(post1);
+      const post2 = box(0.03, 0.03, 0.026, M.metal, 0, 0.128, 0.08);
+      post2.name = 'opticMountRear';
+      optic.add(post2);
+      const housing = extr(weaponRRect(0, 0, 0.05, 0.056, 0.014), 0.185, M.shell, 0, 0.165, -0.062);
+      housing.name = 'opticHousing';
+      optic.add(housing);
+      const lensF = extr(weaponRRect(0, 0, 0.04, 0.046, 0.011), 0.006, M.lens, 0, 0.165, 0.118);
+      lensF.name = 'opticLensFront';
+      optic.add(lensF);
+      const ringShape = weaponRRect(0, 0, 0.05, 0.056, 0.014);
+      ringShape.holes.push(weaponRRect(0, 0, 0.034, 0.04, 0.009, THREE.Path));
+      const ring = extr(ringShape, 0.02, M.panel, 0, 0.165, -0.082);
+      ring.name = 'opticEyepiece';
+      optic.add(ring);
+      const lensR = extr(weaponRRect(0, 0, 0.032, 0.038, 0.008), 0.005, M.lens, 0, 0.165, -0.079);
+      lensR.name = 'opticLensRear';
+      optic.add(lensR);
+      const turret = box(0.026, 0.016, 0.034, M.panel, 0, 0.196, 0.03);
+      turret.name = 'opticTurretTop';
+      optic.add(turret);
+      const windage = box(0.02, 0.026, 0.02, M.panel, 0.032, 0.165, 0.03);
+      windage.name = 'opticTurretSide';
+      optic.add(windage);
+    }
+    gun.add(optic);
+    const grip = new THREE.Group();
+    grip.name = 'grip';
+    grip.position.set(0, 0.005, -0.045);
+    grip.rotation.x = 0.3;
+    {
+      const upper = box(0.048, 0.1, 0.058, M.grip, 0, -0.05, 0);
+      upper.name = 'gripUpper';
+      grip.add(upper);
+      const lower = box(0.04, 0.17, 0.05, M.grip, 0, -0.18, -0.004);
+      lower.name = 'gripLower';
+      grip.add(lower);
+      const cap = box(0.05, 0.014, 0.06, M.bolt, 0, -0.268, -0.006);
+      cap.name = 'gripCap';
+      grip.add(cap);
+    }
+    gun.add(grip);
+    const magazine = new THREE.Group();
+    magazine.name = 'magazine';
+    {
+      const s1 = box(0.042, 0.09, 0.07, M.panel, 0, -0.055, 0.038, -0.15);
+      s1.name = 'magSegment1';
+      magazine.add(s1);
+      const s2 = box(0.042, 0.09, 0.072, M.panel, 0, -0.135, 0.052, -0.33);
+      s2.name = 'magSegment2';
+      magazine.add(s2);
+      const s3 = box(0.042, 0.085, 0.074, M.panel, 0, -0.21, 0.078, -0.52);
+      s3.name = 'magSegment3';
+      magazine.add(s3);
+      const base = box(0.048, 0.014, 0.082, M.bolt, 0, -0.252, 0.098, -0.52);
+      base.name = 'magBasePlate';
+      magazine.add(base);
+      [-0.02, -0.12, -0.2].forEach((y, i) => {
+        const rib = box(0.044, 0.012, 0.007, M.metal, 0, y, [0.072, 0.092, 0.124][i], [-0.15, -0.33, -0.52][i]);
+        rib.name = 'magRib' + (i + 1);
+        magazine.add(rib);
+      });
+    }
+    gun.add(magazine);
+    const triggerGuard = new THREE.Group();
+    triggerGuard.name = 'triggerGuard';
+    {
+      const guardShape = weaponRRect(0, 0, 0.15, 0.066, 0.028);
+      guardShape.holes.push(weaponRRect(0, 0.002, 0.11, 0.04, 0.016, THREE.Path));
+      const guard = extr(guardShape, 0.012, M.panel, 0.006, -0.062, -0.005, -Math.PI / 2);
+      guard.name = 'guardFrame';
+      triggerGuard.add(guard);
+      const trigger = box(0.012, 0.036, 0.008, M.metal, 0, -0.045, 0.012, 0.12);
+      trigger.name = 'triggerBlade';
+      triggerGuard.add(trigger);
+    }
+    gun.add(triggerGuard);
+    const stock = new THREE.Group();
+    stock.name = 'stock';
+    {
+      const s = new THREE.Shape();
+      s.moveTo(0.16, 0.095);
+      s.lineTo(0.375, 0.078);
+      s.quadraticCurveTo(0.4, 0.072, 0.4, 0.05);
+      s.lineTo(0.4, -0.075);
+      s.quadraticCurveTo(0.4, -0.09, 0.385, -0.093);
+      s.lineTo(0.23, -0.06);
+      s.quadraticCurveTo(0.19, -0.045, 0.16, -0.032);
+      s.lineTo(0.16, 0.095);
+      s.holes.push(weaponRRect(0.25, 0.02, 0.09, 0.05, 0.016, THREE.Path));
+      s.holes.push(weaponRRect(0.345, -0.012, 0.055, 0.05, 0.014, THREE.Path));
+      const body = extr(s, 0.038, M.shell, -0.022, 0, 0, Math.PI / 2);
+      body.name = 'stockBody';
+      stock.add(body);
+      const hinge = box(0.05, 0.055, 0.05, M.metal, 0, 0.06, -0.19);
+      hinge.name = 'stockHinge';
+      stock.add(hinge);
+      const pad = box(0.05, 0.17, 0.016, M.grip, 0, -0.01, -0.415);
+      pad.name = 'stockButtPad';
+      stock.add(pad);
+      const riser = box(0.04, 0.014, 0.13, M.panel, 0, 0.096, -0.3);
+      riser.name = 'stockCheekRiser';
+      stock.add(riser);
+    }
+    gun.add(stock);
+    const muzzle = new THREE.Object3D();
+    muzzle.name = 'muzzle';
+    muzzle.position.set(0, AXIS_Y, 1.06);
+    gun.add(muzzle);
+    const gripPoint = new THREE.Object3D();
+    gripPoint.name = 'gripPoint';
+    gripPoint.position.set(0, 0, -0.06);
+    gun.add(gripPoint);
+    const magPoint = new THREE.Object3D();
+    magPoint.name = 'magPoint';
+    magPoint.position.set(0, -0.2, 0.07);
+    gun.add(magPoint);
+    const stockPoint = new THREE.Object3D();
+    stockPoint.name = 'stockPoint';
+    stockPoint.position.set(0, 0.02, -0.38);
+    gun.add(stockPoint);
+    const opticPoint = new THREE.Object3D();
+    opticPoint.name = 'opticPoint';
+    opticPoint.position.set(0, 0.165, 0.03);
+    gun.add(opticPoint);
+    gun.updateMatrixWorld(true);
+    gun.userData = {
+      points: { muzzle: muzzle, grip: gripPoint, magazine: magPoint, stock: stockPoint, optic: opticPoint },
+      materials: M,
+      displayRotation: { x: 0.06, y: Math.PI * 0.30, z: 0 },
+      boundingBox: new THREE.Box3().setFromObject(gun),
+      length: 1.47,
+      axisY: AXIS_Y,
+      simple: !!(opts && opts.simple)
+    };
+    return gun;
+  }
+  const rifle = createWeaponModel({ simple: true });
   P.gun = new THREE.Group();
   P.gun.position.set(0.1, 0.1, 0.5);
-  P.gun.add(mesh(new THREE.BoxGeometry(0.14, 0.16, 0.5), mGun, 0, 0, 0.1));
-  const barrel = mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.5, 10), mGunD, 0, 0.045, 0.5);
-  barrel.rotation.x = Math.PI / 2;
-  P.gun.add(barrel);
-  P.gun.add(mesh(new THREE.BoxGeometry(0.1, 0.2, 0.12), mGunD, 0, -0.14, -0.05));
-  P.gun.add(mesh(new THREE.BoxGeometry(0.05, 0.08, 0.3), mGun, 0, 0.13, 0.28));
+  P.gun.add(rifle);
   P.muzzle = new THREE.Object3D();
-  P.muzzle.position.set(0, 0.045, 0.78);
+  P.muzzle.position.copy(rifle.userData.points.muzzle.position);
   P.gun.add(P.muzzle);
   P.armR.add(P.gun);
   visual.add(P.armR);
@@ -1429,7 +1744,7 @@ const P_HEAD_Y = PCFG.headY;
   for (let i = 0; i < 6; i++) { g.rotate(Math.PI / 3); g.beginPath(); g.moveTo(0, -9); g.lineTo(58, 0); g.lineTo(0, 9); g.closePath(); g.fill(); }
   g.beginPath(); g.arc(0, 0, 18, 0, TAU); g.fill();
   P.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-  P.flash.position.set(0, 0.045, 0.85);
+  P.flash.position.set(0, 0.03, 1.10); // 对齐步枪消音器口（muzzle 1.06 略前）
   P.flash.visible = false;
   P.gun.add(P.flash);
   P.flashLight = new THREE.PointLight(0xffb050, 0, 7);
@@ -2716,14 +3031,14 @@ function animateSlaBody(t, moving, mode) {
     B.position.y = b * 0.18;
     B.rotation.z = Math.sin(t * 9) * 0.05;
     B.rotation.x = 0.05;
-    F.slaArms[0].rotation.set(0.3 + Math.sin(t * 9) * 0.45, 0, 1.15 + Math.sin(t * 9) * 0.25);
-    F.slaArms[1].rotation.set(0.3 + Math.sin(t * 9) * 0.45, 0, -1.15 - Math.sin(t * 9) * 0.25);
+    F.slaArms[0].rotation.set(-1.15 + Math.sin(t * 9) * 0.2, 0, 0.35 + Math.sin(t * 9) * 0.12); // 双手捧腹：臂前伸贴肚面（z 微内收但不横穿躯干）
+    F.slaArms[1].rotation.set(-1.15 + Math.sin(t * 9) * 0.2, 0, -0.35 - Math.sin(t * 9) * 0.12);
     F.slaMouth.scale.set(2.0, 1.7, 1);
     F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05; // 蹲姿保持
   } else if (mode === 'castRay') {
     // 后仰蓄力
-    F.slaArms[0].rotation.set(-0.6, 0, 1.3);
-    F.slaArms[1].rotation.set(-0.6, 0, -1.3);
+    F.slaArms[0].rotation.set(-1.75, 0, -0.55); // 双臂前推蓄力：外张分离，掌在躯干轮廓外
+    F.slaArms[1].rotation.set(-1.75, 0, 0.55);
     B.scale.set(1.05, 1 + Math.sin(t * 6) * 0.03, 1.05);
     B.position.y = 0.04;
     B.rotation.z = 0;
@@ -2732,8 +3047,8 @@ function animateSlaBody(t, moving, mode) {
     F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05; // 蹲姿保持
   } else if (mode === 'repel') {
     // 战吼：张臂前倾
-    F.slaArms[0].rotation.set(-1.0, 0, 1.7);
-    F.slaArms[1].rotation.set(-1.0, 0, -1.7);
+    F.slaArms[0].rotation.set(-0.6, 0, -1.2); // 战吼张臂：大幅外展，零穿模
+    F.slaArms[1].rotation.set(-0.6, 0, 1.2);
     B.scale.set(1.12, 0.95, 1.14);
     B.position.y = 0.03 + Math.sin(t * 16) * 0.03;
     B.rotation.z = 0;
@@ -2742,8 +3057,8 @@ function animateSlaBody(t, moving, mode) {
     F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05; // 蹲姿保持
   } else if (mode === 'castCheese') {
     // 投掷摆动
-    F.slaArms[0].rotation.set(Math.sin(t * 5) * 0.3, 0, 2.2);
-    F.slaArms[1].rotation.set(Math.sin(t * 5) * 0.3, 0, -2.2);
+    F.slaArms[0].rotation.set(-1.8 + Math.sin(t * 5) * 0.3, 0, -0.9); // 投掷摆臂：前挥外张
+    F.slaArms[1].rotation.set(-1.8 + Math.sin(t * 5) * 0.3, 0, 0.9);
     B.scale.set(1 + Math.sin(t * 5) * 0.04, 1 + Math.sin(t * 5) * 0.05, 1);
     B.position.y = Math.abs(Math.sin(t * 5)) * 0.14;
     B.rotation.z = 0;
@@ -3766,7 +4081,7 @@ Models.init();
     picker.value = '';
   });
 })();
-window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame, updateWorldAnims: updateWorldAnims, updateAtmo: updateAtmo, worldAnims: worldAnims, worldRefs: worldRefs, warmupFirstShot: warmupFirstShot, updatePlayer: updatePlayer, updateCamera: updateCamera, updateFrog: updateFrog, updateEnding: updateEnding };
+window.__DBG = { player: player, frog: frog, game: game, CONFIG: CONFIG, renderer: renderer, camera: camera, scene: scene, input: input, Bullets: Bullets, Cheeses: Cheeses, Models: Models, startGame: startGame, updateWorldAnims: updateWorldAnims, updateAtmo: updateAtmo, worldAnims: worldAnims, worldRefs: worldRefs, warmupFirstShot: warmupFirstShot, updatePlayer: updatePlayer, updateCamera: updateCamera, updateFrog: updateFrog, updateEnding: updateEnding, animateSlaBody: animateSlaBody };
 // 分享链接一键复制
 (function wireShare() {
   const url = 'https://ayrtonlin.github.io/peak-duel/';
