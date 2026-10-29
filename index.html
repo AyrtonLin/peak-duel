@@ -2399,9 +2399,9 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   mmouse.visible = false;
   /* —— 奶斯拉（三阶段专属模型，参考图 P3）：巨型黄色哥斯拉态怪兽，root 内独立组 —— */
   const mSlaBody = std(0xf7c94b, { roughness: 0.52 });
-  const mSlaBelly = std(0xfff2d8, { roughness: 0.62 });
+  // （mSlaBelly 已移除：奶肚改为躯干顶点色渐变，无独立贴片）
   const mSlaCream = std(0xfff8ea, { roughness: 0.55 });
-  F.mats.push(mSlaBody, mSlaBelly, mSlaCream); // 受击红闪同步（索引 11/12/13）
+  F.mats.push(mSlaBody, mSlaCream); // 受击红闪同步
   const sla = new THREE.Group();
   F.sla = sla;
   root.add(sla);
@@ -2481,40 +2481,36 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const slaBodyGeo = new THREE.SphereGeometry(1, 36, 44);
   {
     const ps = slaBodyGeo.attributes.position;
+    const cols = new Float32Array(ps.count * 3);
+    const cBody = [0.968, 0.788, 0.294];  // 体色 0xf7c94b（与 mSlaBody 一致）
+    const cCream = [1.0, 0.953, 0.839];   // 奶肚色 0xfff3d6（参考图奶油肚）
     for (let i = 0; i < ps.count; i++) {
       const x = ps.getX(i), y = ps.getY(i), z = ps.getZ(i);
       const t = (y + 1) / 2;
       const k = slaMk(t); // 奶鼠横向轮廓（梨形：下宽上窄、颈/冠高斯收窄）
       const hw = slaHeadFlat(slaHeadY(slaMy(y))), hk = slaHeadK(hw); // 竖向映射（上移+头顶压平）+ 头部横向收缩（颈下恒等；y 正向映射不翻转，保持绕序/法线朝外）
       ps.setXYZ(i, slaMS * slaMXZ * 0.94 * k * hk * x, hw, slaMS * slaMXZ * 1.02 * k * hk * z + slaHeadZ(hw)); // 头部段整截面 +Z 前移（渐变连续，颈身衔接光滑）
+      // 奶肚顶点色：画在躯干表面上（无独立贴片壳 → 无接缝/无硬边/无包壳感），前腹椭圆高斯渐变
+      const zf0 = Math.max(0, Math.min(1, (z - 0.10) / 0.40)); // 正面朝前权重（z 单位球前向）
+      const zf = zf0 * zf0 * (3 - 2 * zf0);
+      const vy = Math.exp(-Math.pow((hw - 1.05) / 0.55, 2)); // 下腹-胸下竖窗（sp 高度约 0.5→1.6 渐入渐出）
+      const mask = 0.95 * vy * zf;
+      cols[i * 3] = cBody[0] + (cCream[0] - cBody[0]) * mask;
+      cols[i * 3 + 1] = cBody[1] + (cCream[1] - cBody[1]) * mask;
+      cols[i * 3 + 2] = cBody[2] + (cCream[2] - cBody[2]) * mask;
     }
+    slaBodyGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     slaBodyGeo.computeVertexNormals();
   }
-  const sTorso = new THREE.Mesh(slaBodyGeo, mSlaBody);
+  // 躯干专属材质：顶点色奶肚 + 本体黄（四肢/尾共用 mSlaBody 不变）；受击红闪同步
+  const mSlaTorso = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.52 });
+  F.mats.push(mSlaTorso);
+  const sTorso = new THREE.Mesh(slaBodyGeo, mSlaTorso);
   sp.add(sTorso); // 奶鼠身体放大一体：头颈身单网格，无分节
-  // 腹部：乳肚贴片（浅奶油色薄壳，沿放大奶鼠躯干前表面参数化生成：每点贴躯干面外浮 0.015）
-  const sBellyGeo = new THREE.PlaneGeometry(1, 1, 18, 14);
-  {
-    const ps = sBellyGeo.attributes.position;
-    const uv = sBellyGeo.attributes.uv;
-    for (let i = 0; i < ps.count; i++) {
-      const u = uv.getX(i), v = uv.getY(i); // u 横向 0→1，v 竖向 0(板底)→1(板顶)
-      const spY = 0.80 + v * 0.80; // 竖跨：下腹（0.80）→ 胸口（1.60，梨形最宽区）
-      const phi = (u - 0.5) * 1.9; // 横向角 ±0.95 rad（约 ±54°，躯干前侧）
-      const y = slaMinv(spY), k = slaMk((y + 1) / 2); // 反解球面高度 → 轮廓系数
-      const rs = Math.sqrt(Math.max(0, 1 - y * y)); // 该高度单位球横截半径
-      const fx = slaMS * slaMXZ * 0.94 * k * rs * Math.sin(phi);
-      const fz = slaMS * slaMXZ * 1.02 * k * rs * Math.cos(phi) + 0.015; // 贴躯干面外浮（含瘦身）
-      ps.setXYZ(i, fx, spY, fz);
-    }
-    sBellyGeo.computeVertexNormals();
-  }
-  const sBelly = new THREE.Mesh(sBellyGeo, mSlaBelly);
-  sp.add(sBelly);
-  F.slaBellyMesh = sBelly;
   // 头部已并入放大奶鼠身体（无独立颈/头件，轮廓连续无分节）；眼睛贴躯干上段前表面
   const mSlaIris = std(0x4f9a33, { roughness: 0.35 });
   F.mats.push(mSlaIris); // 受击红闪同步（索引 14）
+  // （对照参考图微调：小点鼻已按用户要求移除）
   F.slaEyes = []; F.slaPupils = [];
   [[-0.215], [0.215]].forEach(([ex]) => {
     const eye = mesh(new THREE.SphereGeometry(0.115, 14, 12), mSlaIris, ex, 2.585, slaSurf(ex, 2.585) - 0.05); // 加大眼（对照参考图：绿环大眼；深嵌约 0.05、随头形收缩/前移自动跟随）
@@ -2525,11 +2521,6 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     F.slaEyes.push(eye);
     F.slaPupils.push(pu);
   });
-  // 鼻：双眼下中央的小点鼻（对照参考图：墨绿小圆点）
-  const mSlaNose = std(0x77834f, { roughness: 0.5 });
-  F.mats.push(mSlaNose); // 受击红闪同步
-  const sNose = mesh(new THREE.SphereGeometry(0.030, 10, 8), mSlaNose, 0, 2.472, slaSurf(0, 2.472) + 0.004); // 贴头面微凸（不穿不浮）
-  sp.add(sNose);
   // 嘴：贴头面前表面的水平直线嘴管（拉平：无弧度等高线；沿面逐点采样生成，不穿模不悬浮）
   {
     const mouthW = 0.145, mouthY = 2.40, tubeR = 0.022, lift0 = 0.018; // 拉平：嘴角 x 不变、弧度归零（直线等高）
