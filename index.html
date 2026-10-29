@@ -2125,7 +2125,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     if (P >= slaLiftSpan * (1 + slaLift)) return slaNeckY + P / (1 + slaLift);
     return slaNeckY + (Math.sqrt(1 + 4 * a * P) - 1) / (2 * a);
   };
-  const slaHeadFlatY = 2.80, slaHeadFlatC = 6.0; // 头顶压平起点 / 压平强度（头顶弧度减小）
+  const slaHeadFlatY = 2.74, slaHeadFlatC = 10.0; // 头顶压平起点 / 压平强度（头顶弧度再减小：更宽更平的顶）
   const slaHeadFlat = (w) => { // 头顶软压平（2.80 以上渐压：圆弧顶→平缓顶；单调连续可逆，顶点聚拢无折痕）
     const P = w - slaHeadFlatY;
     return P <= 0 ? w : slaHeadFlatY + P / (1 + slaHeadFlatC * P);
@@ -2202,9 +2202,8 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.mats.push(mSlaIris); // 受击红闪同步（索引 14）
   F.slaEyes = []; F.slaPupils = [];
   [[-0.20], [0.20]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.12, 14, 12), mSlaIris, ex, 2.60, slaSurf(ex, 2.60) - 0.08); // 贴缩小上移前移后头面前坡（深嵌约 0.08；随头部收缩/前移自动跟随）
-    const pu = mesh(new THREE.SphereGeometry(0.07, 10, 8), mPup, 0, 0.008, 0.07);
-    pu.add(mesh(new THREE.SphereGeometry(0.022, 6, 6), mGlint, -0.02, 0.026, 0.062));
+    const eye = mesh(new THREE.SphereGeometry(0.09, 14, 12), mSlaIris, ex, 2.60, slaSurf(ex, 2.60) - 0.05); // 缩小眼（深嵌约 0.05、外露 0.04；贴头面前坡，随收缩/前移自动跟随）
+    const pu = mesh(new THREE.SphereGeometry(0.055, 10, 8), mPup, 0, 0.006, 0.05); // 瞳孔同比缩小，微凸虹膜前
     eye.add(pu);
     sp.add(eye);
     F.slaEyes.push(eye);
@@ -2772,9 +2771,9 @@ function animateSlaBody(t, moving, mode) {
     _v1.copy(player.pos).sub(frog.pos); _v1.y = 0;
     const sl = _v1.length() || 1;
     const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / sl;
-    const px = clamp(side, -1, 1) * 0.08;
-    F.slaPupils[0].position.set(px, 0.008, 0.07);
-    F.slaPupils[1].position.set(px, 0.008, 0.07);
+    const px = clamp(side, -1, 1) * 0.055; // 追踪幅度随缩小眼同比（瞳缘不出虹膜）
+    F.slaPupils[0].position.set(px, 0.006, 0.05);
+    F.slaPupils[1].position.set(px, 0.006, 0.05);
   }
   // 尾巴摆动（厚重慢摆）
   const tp = moving ? t * 7 : t * 2.6;
