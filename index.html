@@ -2096,20 +2096,20 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const sp = new THREE.Group(); // 姿态组：呼吸/摆动整体作用
   slaBase.add(sp);
   F.slaPose = sp;
-  // 躯干：宽大厚实哥斯拉态（顶点变形球，肩窄臀宽、腹部前凸；下体裆+臀一体浅平弧面）
+  // 躯干：梨形（顶点变形球：上窄下宽，下腹+臀一体外凸圆弧，弧底圆鼓凸出腿间；大腿根部位置不变）
   const slaBodyGeo = new THREE.SphereGeometry(1, 28, 22);
   {
     const ps = slaBodyGeo.attributes.position;
     for (let i = 0; i < ps.count; i++) {
       const x = ps.getX(i), y = ps.getY(i), z = ps.getZ(i);
       const tt = (y + 1) / 2;
-      const k = 1.06 - 0.3 * Math.pow(Math.max(0.001, (tt - 0.08) / 0.92), 1.5); // 底宽上收（宽肩雏形）
-      const front = z > 0 ? 1.06 - 0.10 * Math.exp(-Math.pow((tt - 0.30) / 0.28, 2)) : 1.0; // 腹部前鼓（下腹收进：tt≈0.30 处前凸最多减 0.10）
+      const k = 1.06 - 0.3 * Math.pow(Math.max(0.001, (tt - 0.08) / 0.92), 1.5); // 梨身：上窄下宽（底最宽）
+      const front = z > 0 ? 1.0 + 0.06 * Math.exp(-Math.pow((tt - 0.35) / 0.22, 2)) : 1.0 + 0.10 * Math.exp(-Math.pow((tt - 0.32) / 0.16, 2)); // 前侧下腹微鼓 + 后侧臀部外凸（梨底弧）
       let ny = y;
-      if (y < -0.10) { // 下体（裆部+臀部）整体内收：底部竖向压扁成一体浅平弧面（无 V 形内凹、无折叠）
-        const d = -0.10 - y; // 距弧面上沿深度（0 → 0.90）
-        const u = Math.pow(d / 0.90, 1.6); // 深度权重（单调保序：浅处密、深处疏）
-        ny = -0.10 - 0.198 * u; // 弧底 sp ≈ 0.72（大腿根 0.835 附近），弧缘平滑升回 sp 0.92 上沿
+      if (y < -0.10) { // 下腹+臀部一体外凸圆弧：底部圆鼓下坠（凸出于大腿根下方、腿间可见圆弧，无折叠）
+        const d = -0.10 - y; // 距弧缘深度（0 → 0.90）
+        const u = Math.pow(d / 0.90, 1.3); // 深度权重（单调保序无折叠）
+        ny = -0.10 - 0.33 * u; // 弧底 sp ≈ 0.59，弧缘 sp 0.92
       }
       ps.setXYZ(i, x * k, ny, z * k * front);
     }
@@ -2119,27 +2119,27 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   sTorso.position.set(0, 1.02, 0);
   sTorso.scale.set(0.86, 1.0, 0.88);
   sp.add(sTorso);
-  // 腹部：独立浅奶油色曲面网格（与躯干同一浅平弧面：裆部+臀部分界消失，弧底至大腿根线，乳肚挂胸不下垂）
+  // 腹部：乳肚板（浅奶油色，前移凸出为梨身前弧；底部与躯干外凸圆弧齐平）
   const sBellyGeo = new THREE.SphereGeometry(0.66, 22, 18);
   {
     const ps = sBellyGeo.attributes.position;
     for (let i = 0; i < ps.count; i++) {
       const x = ps.getX(i), y = ps.getY(i);
-      if (y < -0.05) { // 局部 -0.05（mesh scale y 0.90 → sp ≈ 0.875）
+      if (y < -0.05) { // 局部 -0.05（sp ≈ 0.875 弧缘）
         const d = -0.05 - y; // 0 → 0.61
-        const u = Math.pow(d / 0.61, 1.6); // 与躯干同式：一体浅平弧面、无折叠
-        ps.setY(i, -0.05 - 0.159 * u); // 弧底 sp ≈ 0.73，与躯干弧面齐平
+        const u = Math.pow(d / 0.61, 1.3); // 与躯干同式：外凸圆弧、无折叠
+        ps.setY(i, -0.05 - 0.283 * u); // 弧底 sp ≈ 0.62，与躯干圆弧齐平
       }
     }
     sBellyGeo.computeVertexNormals();
   }
-  const sBelly = mesh(sBellyGeo, mSlaBelly, 0, 0.92, 0.42);
-  sBelly.scale.set(0.80, 0.90, 0.62);
+  const sBelly = mesh(sBellyGeo, mSlaBelly, 0, 0.92, 0.48);
+  sBelly.scale.set(0.80, 0.90, 0.70);
   sp.add(sBelly);
   F.slaBellyMesh = sBelly;
-  // 颈部（粗）+ 头部（前伸），与躯干融合
-  const sNeck = mesh(new THREE.SphereGeometry(0.32, 16, 12), mSlaBody, 0, 1.78, 0.12);
-  sNeck.scale.set(1.15, 0.9, 1);
+  // 颈部（粗，上移加宽填满头-身缝隙：头→颈→身光滑曲线、梨形轮廓无台阶）+ 头部（前伸）
+  const sNeck = mesh(new THREE.SphereGeometry(0.40, 16, 12), mSlaBody, 0, 1.86, 0.16);
+  sNeck.scale.set(1.2, 1.05, 1.05);
   sp.add(sNeck);
   const sHead = mesh(new THREE.SphereGeometry(0.46, 20, 16), mSlaBody, 0, 2.06, 0.28);
   sHead.scale.set(0.95, 0.88, 1.05);
