@@ -2513,7 +2513,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   // （对照参考图微调：小点鼻已按用户要求移除）
   F.slaEyes = []; F.slaPupils = [];
   [[-0.155], [0.155]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.085, 14, 12), mSlaIris, ex, 2.64, slaSurf(ex, 2.64) - 0.05); // 缩小眼并上移（对照参考图：小头高位小眼；深嵌约 0.05、随头形收缩/前移自动跟随）
+    const eye = mesh(new THREE.SphereGeometry(0.085, 14, 12), mSlaIris, ex, 2.74, slaSurf(ex, 2.74) - 0.05); // 缩小眼高位（对照参考图：小头高位小眼；深嵌约 0.05、随头形收缩/前移自动跟随）
     const pu = mesh(new THREE.SphereGeometry(0.045, 10, 8), mPup, 0, 0.006, 0.055); // 黑瞳同比缩小，微凸虹膜前（z 0.055 契约不变）
     eye.add(pu); // （高光点已按用户要求删除）
     sp.add(eye);
@@ -2522,7 +2522,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   // 嘴：贴头面前表面的水平直线嘴管（拉平：无弧度等高线；沿面逐点采样生成，不穿模不悬浮）
   {
-    const mouthW = 0.145, mouthY = 2.40, tubeR = 0.022, lift0 = 0.018; // 拉平：嘴角 x 不变、弧度归零（直线等高）
+    const mouthW = 0.145, mouthY = 2.50, tubeR = 0.022, lift0 = 0.018; // 拉平直线嘴，随眼上移（眼 2.74/嘴 2.50 保持同距）
     const pivotZ = slaSurf(0, mouthY) + lift0;
     const pts = [];
     for (let i = 0; i <= 24; i++) {
