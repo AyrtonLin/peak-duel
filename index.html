@@ -2130,6 +2130,12 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     const s = x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
     return 1 - 0.17 * s;
   };
+  const slaHeadFwd = 0.18, slaHeadFwdSpan = 0.55; // 头部前移量 / 渐变跨度（"稍往前挪"）
+  const slaHeadZ = (w) => { // 头部前移偏移（sp 系 +Z）：颈基 0 → 头部全量（smoothstep 渐入，颈身连接曲线光滑无折角）
+    const x = (w - slaNeckY) / slaHeadFwdSpan;
+    const s = x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+    return slaHeadFwd * s;
+  };
   const slaMinv = (spY) => { // sp 系 y（上移后）→ 单位球 y（先逆上移映射，再二分反解）
     const target = ((slaHeadInv(spY) - slaMY0) / slaMS - 1.04) / 0.96;
     let lo = -1, hi = 1;
@@ -2139,12 +2145,12 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     }
     return (lo + hi) / 2;
   };
-  const slaSurf = (X, spY) => { // sp 系前表面 z（眼/嘴/贴片采样用；与 sTorso 变形一致，含瘦身+头部收缩）
+  const slaSurf = (X, spY) => { // sp 系前表面 z（眼/嘴/贴片采样用；与 sTorso 变形一致，含瘦身+头部收缩+头部前移）
     const y = slaMinv(spY), k = slaMk((y + 1) / 2), hk = slaHeadK(spY);
     const rs = Math.sqrt(Math.max(0, 1 - y * y));
     const xs = X / (slaMS * slaMXZ * 0.94 * k * hk);
     const q = rs * rs - xs * xs;
-    return q > 0 ? slaMS * slaMXZ * 1.02 * k * hk * Math.sqrt(q) : 0;
+    return (q > 0 ? slaMS * slaMXZ * 1.02 * k * hk * Math.sqrt(q) : 0) + slaHeadZ(spY); // 头部段随前移偏移（腹贴片区 spY<2.02 偏移恒 0）
   };
   const slaBodyGeo = new THREE.SphereGeometry(1, 36, 44);
   {
@@ -2154,7 +2160,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
       const t = (y + 1) / 2;
       const k = slaMk(t); // 奶鼠横向轮廓（梨形：下宽上窄、颈/冠高斯收窄）
       const hw = slaHeadY(slaMy(y)), hk = slaHeadK(hw); // 竖向映射（含头部上移）+ 头部横向收缩（颈下恒等；y 正向映射不翻转，保持绕序/法线朝外）
-      ps.setXYZ(i, slaMS * slaMXZ * 0.94 * k * hk * x, hw, slaMS * slaMXZ * 1.02 * k * hk * z);
+      ps.setXYZ(i, slaMS * slaMXZ * 0.94 * k * hk * x, hw, slaMS * slaMXZ * 1.02 * k * hk * z + slaHeadZ(hw)); // 头部段整截面 +Z 前移（渐变连续，颈身衔接光滑）
     }
     slaBodyGeo.computeVertexNormals();
   }
@@ -2185,7 +2191,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   F.mats.push(mSlaIris); // 受击红闪同步（索引 14）
   F.slaEyes = []; F.slaPupils = [];
   [[-0.20], [0.20]].forEach(([ex]) => {
-    const eye = mesh(new THREE.SphereGeometry(0.12, 14, 12), mSlaIris, ex, 2.60, slaSurf(ex, 2.60) - 0.08); // 贴缩小上移后头面前坡（深嵌约 0.08；随头部收缩内收）
+    const eye = mesh(new THREE.SphereGeometry(0.12, 14, 12), mSlaIris, ex, 2.60, slaSurf(ex, 2.60) - 0.08); // 贴缩小上移前移后头面前坡（深嵌约 0.08；随头部收缩/前移自动跟随）
     const pu = mesh(new THREE.SphereGeometry(0.07, 10, 8), mPup, 0, 0.008, 0.07);
     pu.add(mesh(new THREE.SphereGeometry(0.022, 6, 6), mGlint, -0.02, 0.026, 0.062));
     eye.add(pu);
@@ -2262,19 +2268,19 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     sp.add(leg);
   });
   // 尾巴：整条加粗（Tube 根 0.42 → 尾尖 0.134）；近身端（靠身体那端）斜向上：在躯干内沿背内侧爬升、
-  // 从中背（sp≈1.55）半嵌出背与背部粗壮衔接，随后贴背下滑、离背后扫下探，远端自然上收封口
+  // 从中背（sp≈1.47）半嵌出背与背部粗壮衔接，随后贴背下滑、离背后扫下探，远端自然上收封口；整条下移 0.08
   const slaTailPivot = new THREE.Group();
-  slaTailPivot.position.set(0, 0.86, -0.62);
+  slaTailPivot.position.set(0, 0.78, -0.62); // pivot 下移（摆动支点同步下移，尾巴整体降低）
   F.slaTailPivot = slaTailPivot;
   const sTailPts = [ // 近身端首两点在躯干内斜向上沿背爬升；第三点为出背处（与后背半嵌衔接）
-    new THREE.Vector3(0, 0.20, 0.30),     // sp (0, 1.06, -0.32) 深植体内（低位）
-    new THREE.Vector3(0.02, 0.52, 0.00),  // sp (0.02, 1.38, -0.62) 体内斜向上
-    new THREE.Vector3(0.04, 0.69, -0.24), // sp (0.04, 1.55, -0.86) 出背处（半嵌背面）
-    new THREE.Vector3(0.08, 0.60, -0.55), // sp (0.08, 1.46, -1.17) 贴背下滑
-    new THREE.Vector3(0.20, 0.32, -1.00), // sp (0.20, 1.18, -1.62) 离背后扫
-    new THREE.Vector3(0.38, 0.10, -1.38), // sp (0.38, 0.96, -2.00) 下探
-    new THREE.Vector3(0.50, 0.02, -1.68), // sp (0.50, 0.88, -2.30) 最低点
-    new THREE.Vector3(0.58, 0.22, -1.96)  // sp (0.58, 1.08, -2.58) 尾尖自然上收
+    new THREE.Vector3(0, 0.20, 0.30),     // sp (0, 0.98, -0.32) 深植体内（低位）
+    new THREE.Vector3(0.02, 0.52, 0.00),  // sp (0.02, 1.30, -0.62) 体内斜向上
+    new THREE.Vector3(0.04, 0.69, -0.24), // sp (0.04, 1.47, -0.86) 出背处（半嵌背面）
+    new THREE.Vector3(0.08, 0.60, -0.55), // sp (0.08, 1.38, -1.17) 贴背下滑
+    new THREE.Vector3(0.20, 0.32, -1.00), // sp (0.20, 1.10, -1.62) 离背后扫
+    new THREE.Vector3(0.38, 0.10, -1.38), // sp (0.38, 0.88, -2.00) 下探
+    new THREE.Vector3(0.50, 0.02, -1.68), // sp (0.50, 0.80, -2.30) 最低点
+    new THREE.Vector3(0.58, 0.22, -1.96)  // sp (0.58, 1.00, -2.58) 尾尖自然上收
   ];
   const sTailCurve = new THREE.CatmullRomCurve3(sTailPts);
   const sTailGeo = new THREE.TubeGeometry(sTailCurve, 30, 0.42, 10, false);
@@ -2294,34 +2300,38 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   // 尾端封口球帽：半径 0.14 ≥ Tube 末环半径 0.42×0.32=0.134，盖住末端口无切面（近身端深埋体内无需处理）
   slaTailPivot.add(mesh(new THREE.SphereGeometry(0.14, 12, 10), mSlaBody, 0.58, 0.22, -1.96));
   sp.add(slaTailPivot);
-  // 背部白色鳞片：仅沿背部中轴线单列脊线（不铺满背面），从粗尾根上方沿脊背到颈后；
-  // 逐枚解析贴合躯干背面（中心=背面表面点径向内嵌，薄轴对齐径向），鳞径 0.175→0.13 渐变
+  // 背部白色鳞片：沿脊背从尾根（尾管两侧环绕）铺到后脑勺，并向左右两侧展开（交错网格，不铺满侧腹）；
+  // 逐枚解析贴合躯干背面（中心=背面表面点径向内嵌，厚轴对齐径向）；凸起感强：径向厚 + 浅内嵌（大半球隆起）
   F.slaBumps = [];
   const bumpMat = mSlaCream;
-  const slaScaleRows = [ // [行高 spY, 鳞半径 r]（仅中轴线 a=0；首行避开粗尾根贴背区）
-    [1.95, 0.175], [2.08, 0.165], [2.21, 0.155], [2.33, 0.145], [2.44, 0.13]
+  const slaScaleRows = [ // [行高 spY, 鳞半径 r, 角度列表 a（自背中轴左右展开）]
+    [1.55, 0.185, [-0.88, -0.60, 0.60, 0.88]], // 尾根行：中轴让位粗尾管，两侧环绕尾根（延伸至尾巴）
+    [1.70, 0.175, [-0.88, -0.62, 0.62, 0.88]], // 管侧行：中轴仍避让（尾管表面最高≈1.81），近侧角外推开管面
+    [1.85, 0.166, [0, -0.38, 0.38, -0.66, 0.66]], // 中轴行起（中轴枚与尾管上沿咬合衔接；近侧角避开管面）
+    [2.00, 0.157, [-0.88, -0.44, 0.44, 0.88]],
+    [2.15, 0.148, [0, -0.22, 0.22, -0.66, 0.66]],
+    [2.30, 0.139, [-0.88, -0.44, 0.44, 0.88]],
+    [2.45, 0.130, [0, -0.22, 0.22, -0.66, 0.66]],
+    [2.60, 0.121, [0, -0.44, 0.44, -0.66, 0.66]], // 头部行（已收窄，侧向角收小）
+    [2.72, 0.112, [0]] // 后脑勺顶行（头已收窄，仅中轴一枚）
   ];
-  slaScaleRows.forEach(([rowY, r]) => {
+  slaScaleRows.forEach(([rowY, r, angles]) => {
     const ys = slaMinv(rowY), k = slaMk((ys + 1) / 2), hk = slaHeadK(rowY);
     const rs = Math.sqrt(Math.max(0, 1 - ys * ys));
-    const rz = slaMS * slaMXZ * 1.02 * k * hk * rs; // 该行背面横截面半轴（含头部收缩）
-    const d = 0.20 * r; // 径向内嵌（鳞片低伏贴面：外露 0.22r、内植 0.62r）
-    const scaleGrp = new THREE.Group(); // 鳞组：动画 rotation.x 抖动 + baseY 浮动（与旧 bumps 契约一致）
-    scaleGrp.position.set(0, rowY, -(rz - d)); // 背中轴表面点 + 径向内嵌
-    const plate = mesh(new THREE.SphereGeometry(1, 12, 10), bumpMat, 0, 0, 0);
-    plate.scale.set(0.95 * r, 0.55 * r, 0.42 * r); // 扁椭球鳞片：横向宽 / 纵向矮 / 径向薄
-    scaleGrp.add(plate); // 中轴处薄轴（局部 z）即体表径向，无需旋转
-    scaleGrp.userData.baseY = rowY;
-    sp.add(scaleGrp);
-    F.slaBumps.push(scaleGrp);
-  });
-  // 背部斑凸（奶斯拉保留背部无敌提示）
-  F.slaSpots = [];
-  [[-0.44, 1.45, -0.78], [0.40, 1.3, -0.82], [0, 1.6, -0.86]].forEach(p => {
-    const spc = mesh(new THREE.SphereGeometry(0.13, 8, 6), mMouseSpot, p[0], p[1], p[2]);
-    spc.scale.set(1, 0.5, 0.55);
-    sp.add(spc);
-    F.slaSpots.push(spc);
+    const rx = slaMS * slaMXZ * 0.94 * k * hk * rs, rz = slaMS * slaMXZ * 1.02 * k * hk * rs; // 该行横截面半轴（含头部收缩）
+    const d = 0.06 * r; // 径向浅内嵌（凸起鳞：外露 0.56r 隆起于体表，非低伏贴面）
+    const fz = slaHeadZ(rowY); // 头部行随头前移（spY<2.02 恒 0）
+    angles.forEach(a => {
+      const scaleGrp = new THREE.Group(); // 鳞组：动画 rotation.x 抖动 + baseY 浮动（契约不变；rotation.y 不被动画覆写）
+      scaleGrp.position.set((rx - d) * Math.sin(a), rowY, -(rz - d) * Math.cos(a) + fz); // 背面表面点 + 径向内嵌 + 头部前移
+      const plate = mesh(new THREE.SphereGeometry(1, 12, 10), bumpMat, 0, 0, 0);
+      plate.scale.set(0.85 * r, 0.68 * r, 0.62 * r); // 凸起椭球鳞：横向窄 / 纵向高 / 径向厚（隆起感）
+      plate.rotation.y = -a; // 厚轴（局部 z）对齐体表径向（凸起方向沿法向伸出）
+      scaleGrp.add(plate);
+      scaleGrp.userData.baseY = rowY;
+      sp.add(scaleGrp);
+      F.slaBumps.push(scaleGrp);
+    });
   });
   F.slaParts = [sla];
   sla.visible = false;
@@ -2402,9 +2412,9 @@ function applyFrogPhase(n) {
   F.aura.visible = !hasGlb && n >= 3 && !F.sla.visible;
   Models.frogHolders.forEach((h, i) => { if (h) h.visible = (i === n - 1); });
   if (n === 3) F.pupils.forEach(p => { p.material = std(0xffc23a, { emissive: 0xcc7700 }); });
-  // 嘴前锚点/蓄力球随当前模型面部高度（root 坐标）
-  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.82 : n === 3 ? 0.56 : 1.05);
-  F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.9 : n === 3 ? 0.66 : 1.14);
+  // 嘴前锚点/蓄力球随当前模型面部高度（root 坐标；三阶随头部前移 +0.14）
+  F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.82 : n === 3 ? 0.70 : 1.05);
+  F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.9 : n === 3 ? 0.80 : 1.14);
   dom.enName.textContent = FROG_NAMES[n - 1];
   dom.phaseTag.textContent = ['一阶段', '二阶段', '三阶段'][n - 1];
   dom.enImg.src = IMG['P' + n];
