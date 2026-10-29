@@ -2955,143 +2955,171 @@ function animateFrog(dt, moving, mode) {
 function animateMouseBody(t, moving, mode) {
   const B = F.mouseParts[0].children[0]; // 姿态组 mb
   if (mode === 'laugh') {
-    const b = Math.abs(Math.sin(t * 9));
-    B.scale.set(1.1, 0.9 + b * 0.1, 1.1);
+    // 捧腹大笑：弹跳 + 落地挤压（squash&stretch）+ 嘴同步脉动 + 扭动
+    const s9 = Math.sin(t * 9), b = Math.abs(s9);
+    const land = Math.exp(-Math.pow(s9 / 0.35, 2)); // 落地瞬间峰值挤压
+    B.scale.set(1.1 + land * 0.05, 0.9 + b * 0.1 - land * 0.06, 1.1 + land * 0.05);
     B.position.y = b * 0.24;
-    B.rotation.z = Math.sin(t * 9) * 0.06;
+    B.rotation.z = s9 * 0.06;
+    B.rotation.y = s9 * 0.04; // 大笑开心扭动
     B.rotation.x = 0;
-    F.mouseArms[0].rotation.set(Math.sin(t * 9) * 0.5, 0, -2.35 + Math.sin(t * 9) * 0.3);
-    F.mouseArms[1].rotation.set(Math.sin(t * 9) * 0.5, 0, 2.2 + Math.sin(t * 9) * 0.3);
-    F.mouseMouth.scale.set(1.3, 1.5, 1.05);
-    F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
+    F.mouseArms[0].rotation.set(s9 * 0.5, 0, -2.35 + s9 * 0.3);
+    F.mouseArms[1].rotation.set(s9 * 0.5, 0, 2.2 + s9 * 0.3);
+    F.mouseMouth.scale.set(1.3 + b * 0.12, 1.5 + b * 0.18, 1.05);
+    F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = b * 0.06; // 弹跳屈膝缓冲
   } else if (mode === 'castRay') {
-    F.mouseArms[0].rotation.set(-0.5, 0, -2.35);
-    F.mouseArms[1].rotation.set(-0.5, 0, 2.0);
-    B.scale.set(1.05, 1 + Math.sin(t * 6) * 0.03, 1.05);
-    B.position.y = 0.05;
-    B.rotation.z = 0;
-    B.rotation.x = -0.07; // 后仰蓄力
+    // 后仰蓄力：胸廓充能脉动 + 手臂高频充能颤抖（不再僵直）
+    const chg = Math.sin(t * 3) * 0.5 + 0.5; // 0..1 充能呼吸
+    F.mouseArms[0].rotation.set(-0.5 + Math.sin(t * 17) * 0.025 + chg * 0.06, 0, -2.35 - chg * 0.1);
+    F.mouseArms[1].rotation.set(-0.5 + Math.sin(t * 17 + 1.4) * 0.025 + chg * 0.06, 0, 2.0 + chg * 0.1);
+    B.scale.set(1.05 + chg * 0.03, 1 + chg * 0.05, 1.05 + chg * 0.03);
+    B.position.y = 0.05 + chg * 0.02;
+    B.rotation.z = Math.sin(t * 3) * 0.02;
+    B.rotation.y = 0;
+    B.rotation.x = -0.07 - chg * 0.04; // 充能渐后仰
     F.mouseMouth.scale.set(1.15, 1.3, 1.1);
     F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
   } else if (mode === 'repel') {
-    F.mouseArms[0].rotation.set(-1.1, 0, -1.2);
-    F.mouseArms[1].rotation.set(-1.1, 0, 1.2);
+    // 战吼：双臂律动外扩泵动 + 重心交替 + 高频战栗
+    const pump = Math.sin(t * 4);
+    F.mouseArms[0].rotation.set(-1.1 + Math.sin(t * 14) * 0.03, 0, -1.2 - pump * 0.1);
+    F.mouseArms[1].rotation.set(-1.1 + Math.sin(t * 14 + 0.9) * 0.03, 0, 1.2 + pump * 0.1);
     B.scale.set(1.1, 0.95, 1.12);
     B.position.y = 0.03 + Math.sin(t * 16) * 0.03;
-    B.rotation.z = 0;
-    B.rotation.x = 0.1; // 前倾压向玩家
+    B.rotation.z = pump * 0.03;
+    B.rotation.y = 0;
+    B.rotation.x = 0.1;
     F.mouseMouth.scale.set(1.2, 1.35, 1.1);
     F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
   } else if (mode === 'castCheese') {
-    F.mouseArms[0].rotation.set(Math.sin(t * 5) * 0.3, 0, -2.6);
-    F.mouseArms[1].rotation.set(Math.sin(t * 5) * 0.3, 0, 2.6);
-    B.scale.set(1 + Math.sin(t * 5) * 0.04, 1 + Math.sin(t * 5) * 0.05, 1);
-    B.position.y = Math.abs(Math.sin(t * 5)) * 0.16;
+    // 投掷：双臂相位错开（后臂先挥）+ 身体拧转跟随
+    const sw = Math.sin(t * 5), sw2 = Math.sin(t * 5 - 0.5);
+    F.mouseArms[0].rotation.set(sw * 0.3, 0, -2.6);
+    F.mouseArms[1].rotation.set(sw2 * 0.3, 0, 2.6 + sw2 * 0.12);
+    B.scale.set(1 + sw * 0.04, 1 + sw * 0.05, 1);
+    B.position.y = Math.abs(sw) * 0.16;
     B.rotation.z = 0;
+    B.rotation.y = sw * 0.12; // 拧身投掷
     B.rotation.x = 0;
-    F.mouseMouth.scale.set(1.1, 1.3, 1); // 投掷张嘴
+    F.mouseMouth.scale.set(1.1, 1.3, 1);
     F.mouseLegs[0].rotation.x = F.mouseLegs[1].rotation.x = 0;
   } else {
-    // —— 常规：呼吸起伏 + 挥手待机/走路划腿 + 瞳孔追踪 ——
-    const wave = mode === 'idle' ? 1 : 0; // 保留：菜单即 idle
+    // —— 常规：呼吸起伏 + 挥手/走路划腿 + 步态扭臀（waddle）+ 待机嗅探微跳 + 瞳孔追踪微颤视 ——
     F.mouseArms[0].rotation.set(Math.sin(t * 3.1) * 0.16, 0, -2.35 + Math.sin(t * 3.1) * 0.14); // 左手常挥（向外举起可见）
     F.mouseArms[1].rotation.set(Math.sin(t * 2.2) * 0.12 + (moving ? Math.sin(t * 7) * 0.25 : 0), 0, 0.35 + (moving ? Math.sin(t * 7) * 0.2 : 0));
     F.mouseMouth.scale.set(1, 1, 1);
     const br = Math.sin(t * (moving ? 7 : 2.4)) * (moving ? 0.06 : 0.03);
     B.scale.set(1 - br * 0.6, 1 + br, 1 - br * 0.6);
-    B.position.y = moving ? Math.abs(Math.sin(frog.walkPhase)) * 0.11 : 0;
-    B.rotation.z = moving ? Math.sin(frog.walkPhase) * 0.07 : 0;
+    B.position.y = moving ? Math.abs(Math.sin(frog.walkPhase)) * 0.11 : Math.abs(Math.sin(t * 2.6)) * 0.012; // 待机嗅探微跳
+    B.rotation.z = moving ? Math.sin(frog.walkPhase) * 0.07 : Math.sin(t * 0.8) * 0.02; // 待机重心慢摆
+    B.rotation.y = moving ? Math.sin(frog.walkPhase) * 0.08 : 0; // 步态扭臀摇摆（waddle）
     B.rotation.x = frog.flinch > 0 ? -0.22 * (frog.flinch / 0.25) : 0;
     const ls = moving ? Math.sin(frog.walkPhase) * 0.5 : Math.sin(t * 2.4) * 0.06;
     F.mouseLegs[0].rotation.x = ls;
     F.mouseLegs[1].rotation.x = -ls;
-    // 瞳孔追踪（与蛋体同公式）
+    // 瞳孔追踪（与蛋体同公式）+ 微颤视（saccade：缓慢漂移 ±0.005 + 竖向微颤）
     _v1.copy(player.pos).sub(frog.pos); _v1.y = 0;
     const dLen = _v1.length() || 1;
     const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / dLen;
     const px = clamp(side, -1, 1) * 0.09;
+    const sacc = Math.sin(t * 0.9 + Math.sin(t * 0.23) * 2) * 0.005; // 准随机漂移
     // 瞳孔外下偏置 + 玩家横向追踪：视线看向正斜下方
-    F.mousePupils[0].position.set(px - 0.014, -0.016, 0.040);
-    F.mousePupils[1].position.set(px + 0.014, -0.016, 0.040);
+    F.mousePupils[0].position.set(px - 0.014 + sacc, -0.016 + Math.sin(t * 3) * 0.004, 0.040);
+    F.mousePupils[1].position.set(px + 0.014 + sacc, -0.016 + Math.sin(t * 3) * 0.004, 0.040);
   }
-  // 尾巴独立摆动：走快 / 站慢
-  const tSpeed = moving ? t * 9 : t * 3.2;
-  F.mouseTailPivot.rotation.y = Math.sin(tSpeed) * (moving ? 0.3 : 0.18);
-  F.mouseTailPivot.rotation.x = Math.sin(tSpeed * 0.6) * 0.08;
-  F.mouseEyes.forEach(e => { e.rotation.y = 0; });
+  // 尾巴：基础摆 + 卷曲滚动（rotation.z）+ 鞭梢二次摆；情绪提速（大笑/投掷兴奋、蓄力紧张收慢）
+  const exc = mode === 'laugh' ? 1.6 : mode === 'castCheese' ? 1.3 : mode === 'castRay' ? 0.55 : mode === 'repel' ? 1.15 : 1;
+  const tSpeed = (moving ? t * 9 : t * 3.2) * exc;
+  F.mouseTailPivot.rotation.y = Math.sin(tSpeed) * (moving ? 0.3 : 0.18) * (exc > 1 ? 1.25 : 1);
+  F.mouseTailPivot.rotation.x = Math.sin(tSpeed * 0.6) * 0.08 + Math.sin(tSpeed * 1.7) * 0.035;
+  F.mouseTailPivot.rotation.z = Math.sin(tSpeed * 0.5 + 1.2) * 0.14;
+  F.mouseEyes.forEach(e => { e.rotation.y = 0; }); // 契约保持：眼朝向每帧归零（眨眼由 updateFrog 统一）
   // 奶鼠受击红闪与蛋体一致
   F.mats.forEach(m => m.emissive.setHex(frog.flinch > 0 ? 0x5a4010 : 0x000000));
 }
 function animateSlaBody(t, moving, mode) {
   const B = F.slaPose;
   if (mode === 'laugh') {
-    // 捧腹大笑（声波施放）：张嘴喷奶泡 + 肚子大幅起伏
-    const b = Math.abs(Math.sin(t * 9));
-    B.scale.set(1.08, 0.92 + b * 0.09, 1.08);
+    // 捧腹大笑：落地挤压（squash&stretch）+ 嘴同步脉动 + 开心扭动（臂值 q 锁定不加幅）
+    const s9 = Math.sin(t * 9), b = Math.abs(s9);
+    const land = Math.exp(-Math.pow(s9 / 0.35, 2)); // 落地瞬间峰值挤压
+    B.scale.set(1.08 + land * 0.05, 0.92 + b * 0.09 - land * 0.06, 1.08 + land * 0.05);
     B.position.y = b * 0.18;
-    B.rotation.z = Math.sin(t * 9) * 0.05;
+    B.rotation.z = s9 * 0.05;
+    B.rotation.y = s9 * 0.03; // 大笑开心扭动
     B.rotation.x = 0.05;
-    F.slaArms[0].rotation.set(-1.15 + Math.sin(t * 9) * 0.2, 0, 0.35 + Math.sin(t * 9) * 0.12); // 双手捧腹：臂前伸贴肚面（z 微内收但不横穿躯干）
-    F.slaArms[1].rotation.set(-1.15 + Math.sin(t * 9) * 0.2, 0, -0.35 - Math.sin(t * 9) * 0.12);
-    F.slaMouth.scale.set(2.0, 1.7, 1);
-    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05; // 蹲姿保持
+    F.slaArms[0].rotation.set(-1.15 + s9 * 0.2, 0, 0.35 + s9 * 0.12); // 双手捧腹：臂前伸贴肚面（q 锁定）
+    F.slaArms[1].rotation.set(-1.15 + s9 * 0.2, 0, -0.35 - s9 * 0.12);
+    F.slaMouth.scale.set(2.0 + b * 0.15, 1.7 + b * 0.2, 1);
+    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05 + b * 0.05; // 蹲姿屈膝缓冲
   } else if (mode === 'castRay') {
-    // 后仰蓄力
-    F.slaArms[0].rotation.set(-1.75, 0, -0.55); // 双臂前推蓄力：外张分离，掌在躯干轮廓外
-    F.slaArms[1].rotation.set(-1.75, 0, 0.55);
-    B.scale.set(1.05, 1 + Math.sin(t * 6) * 0.03, 1.05);
+    // 后仰蓄力：胸廓充能脉动 + 手臂 16Hz 髙频充能颤抖（不再僵直）
+    const chg = Math.sin(t * 3) * 0.5 + 0.5; // 0..1 充能呼吸
+    F.slaArms[0].rotation.set(-1.75 + Math.sin(t * 16) * 0.03 + chg * 0.08, 0, -0.55 - chg * 0.06);
+    F.slaArms[1].rotation.set(-1.75 + Math.sin(t * 16 + 1.3) * 0.03 + chg * 0.08, 0, 0.55 + chg * 0.06);
+    B.scale.set(1.05 + chg * 0.02, 1 + chg * 0.04, 1.05 + chg * 0.02);
     B.position.y = 0.04;
-    B.rotation.z = 0;
-    B.rotation.x = -0.08;
+    B.rotation.z = Math.sin(t * 3) * 0.02;
+    B.rotation.y = 0;
+    B.rotation.x = -0.08 - chg * 0.05; // 充能渐后仰
     F.slaMouth.scale.set(1.6, 1.1, 1);
-    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05; // 蹲姿保持
+    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05 - chg * 0.04; // 扎根下沉
   } else if (mode === 'repel') {
-    // 战吼：张臂前倾
-    F.slaArms[0].rotation.set(-0.6, 0, -1.2); // 战吼张臂：大幅外展，零穿模
-    F.slaArms[1].rotation.set(-0.6, 0, 1.2);
+    // 战吼：双臂律动外扩泵动 + 重心交替 + 13Hz 战栗
+    const pump = Math.sin(t * 4);
+    F.slaArms[0].rotation.set(-0.6 + Math.sin(t * 13) * 0.03, 0, -1.2 - pump * 0.09);
+    F.slaArms[1].rotation.set(-0.6 + Math.sin(t * 13 + 0.8) * 0.03, 0, 1.2 + pump * 0.09);
     B.scale.set(1.12, 0.95, 1.14);
     B.position.y = 0.03 + Math.sin(t * 16) * 0.03;
-    B.rotation.z = 0;
+    B.rotation.z = pump * 0.035; // 重心交替
+    B.rotation.y = 0;
     B.rotation.x = 0.12;
-    F.slaMouth.scale.set(1.8, 1.4, 1);
-    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05; // 蹲姿保持
+    F.slaMouth.scale.set(1.8 + pump * 0.06, 1.4 + pump * 0.07, 1); // 嘴 8Hz 同步吼
+    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05;
   } else if (mode === 'castCheese') {
-    // 投掷摆动
-    F.slaArms[0].rotation.set(-1.8 + Math.sin(t * 5) * 0.3, 0, -0.9); // 投掷摆臂：前挥外张
-    F.slaArms[1].rotation.set(-1.8 + Math.sin(t * 5) * 0.3, 0, 0.9);
-    B.scale.set(1 + Math.sin(t * 5) * 0.04, 1 + Math.sin(t * 5) * 0.05, 1);
-    B.position.y = Math.abs(Math.sin(t * 5)) * 0.14;
+    // 投掷：双臂相位错开（后臂先挥）+ 拧身跟随
+    const sw = Math.sin(t * 5), sw2 = Math.sin(t * 5 - 0.5);
+    F.slaArms[0].rotation.set(-1.8 + sw * 0.3, 0, -0.9);
+    F.slaArms[1].rotation.set(-1.8 + sw2 * 0.3, 0, 0.9 + sw2 * 0.06);
+    B.scale.set(1 + sw * 0.04, 1 + sw * 0.05, 1);
+    B.position.y = Math.abs(sw) * 0.14;
     B.rotation.z = 0;
+    B.rotation.y = sw * 0.09; // 拧身投掷
     B.rotation.x = 0;
     F.slaMouth.scale.set(1.5, 1.1, 1);
-    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05; // 蹲姿保持
+    F.slaLegs[0].rotation.x = F.slaLegs[1].rotation.x = -1.05;
   } else {
-    // —— 常规：厚重呼吸（腹部起伏）+ 重量感走路 + 瞳孔追踪 ——
+    // —— 常规：厚重呼吸 + 重量感走路 + 待机重心慢摆 + 瞳孔追踪微颤视 ——
     const br = Math.sin(t * (moving ? 6.5 : 2.2)) * (moving ? 0.05 : 0.028);
     B.scale.set(1 + br * 0.4, 1 + br * 0.55, 1 + br);
-    B.position.y = moving ? Math.abs(Math.sin(frog.walkPhase)) * 0.08 : 0;
-    B.rotation.z = moving ? Math.sin(frog.walkPhase) * 0.05 : 0;
+    B.position.y = moving ? Math.abs(Math.sin(frog.walkPhase)) * 0.08 : Math.abs(Math.sin(t * 1.3)) * 0.008; // 待机重量沉浮
+    B.rotation.z = moving ? Math.sin(frog.walkPhase) * 0.05 : Math.sin(t * 1.1) * 0.02; // 待机重心慢摆
+    B.rotation.y = moving ? Math.sin(frog.walkPhase) * 0.05 : 0; // 步态扭身
     B.rotation.x = frog.flinch > 0 ? -0.26 * (frog.flinch / 0.25) : 0; // 受击后仰
     F.slaMouth.scale.set(1, 1, 1);
-    // 手臂：前伸基姿小幅摆动（往前伸出架势恒定，行走时前后起伏迈步感）
+    // 手臂：前伸基姿小幅摆动（行走时前后起伏迈步感）
     F.slaArms[0].rotation.set(-1.25 + Math.sin(t * (moving ? 7 : 2.2)) * (moving ? 0.15 : 0.05), 0, -0.35 - Math.sin(t * 2.2) * 0.05);
     F.slaArms[1].rotation.set(-1.25 - Math.sin(t * (moving ? 7 : 2.2)) * (moving ? 0.15 : 0.05), 0, 0.35 + Math.sin(t * 2.2) * 0.05);
-    // 腿：蹲姿交替小步（摆幅收小防脚底波动；踝动态补偿脚掌平放）
+    // 腿：蹲姿交替小步（摆幅收小防脚底波动）
     const ls = moving ? Math.sin(frog.walkPhase) * 0.12 : Math.sin(t * 2.2) * 0.03;
     F.slaLegs[0].rotation.x = -1.05 + ls;
     F.slaLegs[1].rotation.x = -1.05 - ls;
-    // 瞳孔追踪（与蛋/奶鼠同公式）
+    // 瞳孔追踪 + 微颤视（saccade：慢漂移 + 竖向微颤）
     _v1.copy(player.pos).sub(frog.pos); _v1.y = 0;
     const sl = _v1.length() || 1;
     const side = (Math.cos(frog.yaw) * _v1.x - Math.sin(frog.yaw) * _v1.z) / sl;
     const px = clamp(side, -1, 1) * 0.055; // 追踪幅度随缩小眼同比（瞳缘不出虹膜）
-    F.slaPupils[0].position.set(px, 0.006, 0.05);
-    F.slaPupils[1].position.set(px, 0.006, 0.05);
+    const sacc = Math.sin(t * 0.9 + Math.sin(t * 0.23) * 2) * 0.005; // 准随机漂移
+    const py = 0.006 + Math.sin(t * 2.6) * 0.004; // 竖向微颤
+    F.slaPupils[0].position.set(px + sacc, py, 0.05);
+    F.slaPupils[1].position.set(px - sacc, py, 0.05); // 双瞳反向微颤（更灵动）
   }
-  // 尾巴摆动（厚重慢摆）
-  const tp = moving ? t * 7 : t * 2.6;
-  F.slaTailPivot.rotation.y = Math.sin(tp) * (moving ? 0.22 : 0.13);
-  F.slaTailPivot.rotation.x = Math.sin(tp * 0.55) * 0.05;
+  // 尾巴：基础摆 + 情绪提速（大笑/投掷兴奋、蓄力紧张收慢）+ 卷曲滚动 + 鞭梢二次摆
+  const exc = mode === 'laugh' ? 1.5 : mode === 'castCheese' ? 1.25 : mode === 'castRay' ? 0.5 : mode === 'repel' ? 1.1 : 1;
+  const tp = (moving ? t * 7 : t * 2.6) * exc;
+  F.slaTailPivot.rotation.y = Math.sin(tp) * (moving ? 0.22 : 0.13) * (exc > 1 ? 1.2 : 1);
+  F.slaTailPivot.rotation.x = Math.sin(tp * 0.55) * 0.05 + Math.sin(tp * 1.6) * 0.02;
+  F.slaTailPivot.rotation.z = Math.sin(tp * 0.5 + 0.8) * 0.1; // 卷曲滚动
   // 背脊奶油凸起轻微晃动（逐个错相，奶冻感）
   F.slaBumps.forEach((b, i) => {
     const jj = Math.sin(t * (moving ? 11 : 3.4) + i * 0.9) * (moving ? 0.1 : 0.045);
