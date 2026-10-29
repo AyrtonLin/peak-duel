@@ -1852,7 +1852,7 @@ const frog = {
   dead: false, stunT: 0, deathT: 0, blinkT: 2
 };
 const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: null, mouthAnchor: null,
-  crown: null, aura: null, brows: [], chargeOrb: null, beam: null, beamGlow: null, waveRings: [], mats: [],
+  aura: null, brows: [], chargeOrb: null, beam: null, beamGlow: null, waveRings: [], mats: [],
   armL: null, armR: null, legs: [] };
 
 (function buildFrog() {
@@ -2194,27 +2194,20 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     F.slaMouth = mpivot;
     sp.add(F.slaMouth);
   }
-  // 手臂：一节直臂斜向外展开 + 肩球过渡（臂根埋入躯干内，连接顺滑无断层）+ 灰绿色五指手掌
+  // 手臂：圆台形一节直臂（肩端粗→掌端细，斜向外展开）+ 灰绿色球形手掌（无手指）
   const mSlaHand = std(0x8b9e82, { roughness: 0.55 });
   F.mats.push(mSlaHand); // 受击红闪同步
   F.slaArms = [];
   [[-1, -0.64], [1, 0.64]].forEach(([sd, ax]) => {
     const arm = new THREE.Group();
-    arm.position.set(ax, 1.85, 0.14); // 肩关节埋入瘦身躯干肩侧（该高度躯干半宽≈0.75，肩球外缘≈0.85 微露）
+    arm.position.set(ax, 1.85, 0.14); // 肩关节埋入瘦身躯干肩侧（该高度躯干半宽≈0.75）
     arm.rotation.z = sd * 0.92; // 单节直臂：向左右两侧斜向外展开（约 53°）
     arm.rotation.x = 0.32;      // 略向前伸
-    // 肩球：过渡鼓包内嵌躯干肩侧表面（顺滑连接不穿帮），外覆臂根
-    const shoulder = mesh(new THREE.SphereGeometry(0.19, 12, 10), mSlaBody, sd * 0.02, 0.03, 0.01);
-    const limb = mesh(new THREE.CapsuleGeometry(0.125, 0.62, 4, 12), mSlaBody, 0, -0.38, 0); // 直臂一节到底
-    // 灰绿色手掌（宽扁）+ 五根分明手指（中指最长、拇指粗短，沿臂向自然扇开）
-    const palm = mesh(new THREE.SphereGeometry(0.14, 10, 8), mSlaHand, 0, -0.84, 0.03);
-    palm.scale.set(1.25, 0.85, 0.75);
-    [[-0.11, 0.13], [-0.055, 0.16], [0, 0.17], [0.055, 0.15], [0.11, 0.12]].forEach(([fx, L], fi) => {
-      const fg = mesh(new THREE.CapsuleGeometry(fi === 0 ? 0.040 : 0.034, L, 3, 8), mSlaHand, fx, -0.97 - L / 2, 0.05);
-      fg.rotation.z = fx * 1.4; // 五指沿掌缘自然扇开
-      arm.add(fg);
-    });
-    arm.add(shoulder, limb, palm);
+    // 圆台臂：肩端半径 0.16 → 掌端半径 0.11 渐收（轴沿臂向，粗肩细腕；奶鼠同款造型）
+    const limb = mesh(new THREE.CylinderGeometry(0.16, 0.11, 0.62, 12), mSlaBody, 0, -0.38, 0); // 直臂一节到底
+    // 球形手掌（灰绿、无手指；球顶与圆台掌端交叠 0.02 衔接顺滑）
+    const palm = mesh(new THREE.SphereGeometry(0.17, 14, 12), mSlaHand, 0, -0.84, 0.03);
+    arm.add(limb, palm);
     arm.userData.baseZ = arm.rotation.z;
     F.slaArms.push(arm);
     sp.add(arm);
@@ -2280,26 +2273,40 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     sTailGeo.computeVertexNormals();
   }
   slaTailPivot.add(new THREE.Mesh(sTailGeo, mSlaBody));
+  // 尾端封口球帽：半径 0.1 ≥ Tube 末环半径 0.3×0.32=0.096，盖住末端口无切面（根端深埋体内无需处理）
+  slaTailPivot.add(mesh(new THREE.SphereGeometry(0.1, 12, 10), mSlaBody, 0.58, 0.14, -2.00));
   sp.add(slaTailPivot);
-  // 背部奶油状凸起：奶白色圆润波浪隆脊，从颈后沿脊背排列到尾根（错落大小/高低）
+  // 背部白色鳞片：参数化网格生成，逐枚解析贴合躯干背面（中心=背面表面点径向内嵌，薄轴对齐径向），
+  // 9 行交错（行高 0.85→2.45）铺满整个背面（尾根到颈后），鳞径 0.22→0.13 随身体收窄渐变
   F.slaBumps = [];
   const bumpMat = mSlaCream;
-  [[0, 2.5, -0.46, 0.16], [0.06, 2.3, -0.54, 0.19], [-0.05, 2.05, -0.65, 0.23], [0.08, 1.75, -0.76, 0.27],
-   [-0.08, 1.4, -0.86, 0.24], [0.05, 1.05, -0.81, 0.19], [0, 0.9, -0.73, 0.15]].forEach((b, bi) => {
-    const bump = new THREE.Group();
-    bump.position.set(b[0], b[1], b[2]);
-    // 每个凸起 = 3 个重叠奶球，形成圆润卷曲的奶油丘
-    blob(bump, b[3] * 1.15, b[3] * 0.9, b[3] * 1.25, bumpMat);
-    blob(bump, b[3] * 0.75, b[3] * 0.6, b[3] * 0.7, bumpMat, b[3] * 0.55, b[3] * 0.45, -b[3] * 0.3);
-    blob(bump, b[3] * 0.5, b[3] * 0.42, b[3] * 0.45, bumpMat, -b[3] * 0.5, b[3] * 0.3, b[3] * 0.45);
-    sp.add(bump);
-    F.slaBumps.push(bump);
+  const slaScaleRows = [ // [行高 spY, 鳞半径 r, 角度列表 a（自背中轴左右展开；首行避开尾根中部）]
+    [0.85, 0.20, [-0.85, -0.5, 0.5, 0.85]],
+    [1.05, 0.21, [-0.66, 0, 0.66]],
+    [1.25, 0.22, [-0.95, -0.32, 0.32, 0.95]],
+    [1.45, 0.21, [-0.64, 0, 0.64]],
+    [1.65, 0.20, [-0.95, -0.32, 0.32, 0.95]],
+    [1.85, 0.19, [-0.62, 0, 0.62]],
+    [2.05, 0.17, [-0.92, -0.31, 0.31, 0.92]],
+    [2.25, 0.15, [-0.58, 0, 0.58]],
+    [2.45, 0.13, [-0.82, 0, 0.82]]
+  ];
+  slaScaleRows.forEach(([rowY, r, angles]) => {
+    const ys = slaMinv(rowY), k = slaMk((ys + 1) / 2), rs = Math.sqrt(Math.max(0, 1 - ys * ys));
+    const rx = slaMS * slaMXZ * 0.94 * k * rs, rz = slaMS * slaMXZ * 1.02 * k * rs; // 该行背面横截面半轴
+    const d = 0.20 * r; // 径向内嵌（鳞片低伏贴面：外露 0.22r、内植 0.62r）
+    angles.forEach(a => {
+      const scaleGrp = new THREE.Group(); // 鳞组：动画 rotation.x 抖动 + baseY 浮动（与旧 bumps 契约一致）
+      scaleGrp.position.set((rx - d) * Math.sin(a), rowY, -(rz - d) * Math.cos(a)); // 背面表面点 + 径向内嵌
+      const plate = mesh(new THREE.SphereGeometry(1, 12, 10), bumpMat, 0, 0, 0);
+      plate.scale.set(0.95 * r, 0.55 * r, 0.42 * r); // 扁椭球鳞片：横向宽 / 纵向矮 / 径向薄
+      plate.rotation.y = -a; // 薄轴对齐体表径向（鳞面沿切平面铺开贴背）
+      scaleGrp.add(plate);
+      scaleGrp.userData.baseY = rowY;
+      sp.add(scaleGrp);
+      F.slaBumps.push(scaleGrp);
+    });
   });
-  function blob(bg, rx, ry, rz, mat, ox, oy, oz) {
-    const m = mesh(new THREE.SphereGeometry(1, 12, 10), mat, ox || 0, oy || 0, oz || 0);
-    m.scale.set(rx, ry, rz);
-    bg.add(m);
-  }
   // 背部斑凸（奶斯拉保留背部无敌提示）
   F.slaSpots = [];
   [[-0.44, 1.45, -0.78], [0.40, 1.3, -0.82], [0, 1.6, -0.86]].forEach(p => {
@@ -2310,16 +2317,6 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   F.slaParts = [sla];
   sla.visible = false;
-  // 二阶段：奶酪皇冠
-  F.crown = new THREE.Group();
-  const cheeseMat = std(0xffd54f, { roughness: 0.6 });
-  const wedge = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.22, 14, 1, false, 0, Math.PI / 2), cheeseMat);
-  F.crown.add(wedge);
-  F.crown.add(mesh(new THREE.SphereGeometry(0.05, 6, 6), mDark, 0.08, 0.12, 0.14));
-  F.crown.add(mesh(new THREE.SphereGeometry(0.05, 6, 6), mDark, 0.2, 0.12, 0.02));
-  F.crown.position.set(0, 2.06, 0.1);
-  F.crown.rotation.y = -0.4;
-  body.add(F.crown);
   // 三阶段：金色眉毛 + 光环（贴蛋形轮廓，眉位于眼上前方）
   const browMat = std(0xc9862a);
   [[-0.24, 1.8, 0.45], [0.24, 1.8, 0.45]].forEach(p => {
@@ -2393,10 +2390,6 @@ function applyFrogPhase(n) {
   } else {
     F.procParts.forEach(p => { p.visible = false; }); // 二/三阶用专属模型，蛋体整套隐藏
   }
-  F.crown.visible = !hasGlb && n >= 3; // 皇冠仅奶斯拉佩戴（奶鼠不戴）
-  F.crown.position.set(0, n === 2 ? 1.99 : n === 3 ? 2.60 : 2.06, n === 2 ? 0.06 : n === 3 ? 0.06 : 0.1);
-  F.crown.scale.setScalar(n === 3 ? 0.8 : 1); // 奶斯拉：皇冠缩小扣奶鼠式软限幅平头顶
-  if (n === 3) F.crown.rotation.z = 0.12; else F.crown.rotation.z = 0; // 歪戴皇冠
   F.brows.forEach(b => { b.visible = !hasGlb && n >= 3 && !F.sla.visible; });
   F.aura.visible = !hasGlb && n >= 3 && !F.sla.visible;
   Models.frogHolders.forEach((h, i) => { if (h) h.visible = (i === n - 1); });
