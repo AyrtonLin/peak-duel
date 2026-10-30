@@ -339,7 +339,7 @@ const Sfx = (() => {
     src.connect(f); f.connect(g); g.connect(master);
     src.start(t0); src.stop(t0 + dur + 0.06);
   }
-  let rayOsc = null, rayGain = null, rayLfo = null;
+  let rayOsc = null, rayOsc2 = null, rayGain = null, rayLfo = null;
   return {
     init,
     shoot() { // 枪响三层：脆响「嚓」+ 低频尾「磅」+ 身体「咚」
@@ -356,8 +356,8 @@ const Sfx = (() => {
     hurt() { tone(170, 70, 0.16, 'sawtooth', 0.28); noise(0.08, 0.1, 500); },
     jump() { tone(250, 660, 0.22, 'sine', 0.26); tone(380, 980, 0.18, 'sine', 0.1, 0.03); },
     land() { noise(0.1, 0.16, 320); },
-    rayWarn() { tone(430, 990, 0.5, 'sine', 0.2); tone(860, 1980, 0.35, 'sine', 0.08, 0.08); },
-    rayTick() { tone(1200, 700, 0.06, 'square', 0.12); },
+    rayWarn() { tone(520, 620, 0.4, 'sine', 0.14); tone(780, 930, 0.3, 'sine', 0.06, 0.1); }, // 柔和双音提示（替换原尖啸）
+    rayTick() { tone(640, 480, 0.05, 'sine', 0.09); }, // 软泡泡音（替换原 1200Hz 方波）
     cheeseSpawn() { tone(1350, 500, 0.45, 'sine', 0.13); },
     cheeseSplat() { noise(0.18, 0.28, 800, 'lowpass', 0, 140); tone(150, 55, 0.16, 'triangle', 0.2); },
     laugh() { [0, 0.13, 0.26, 0.39].forEach((d, i) => tone(310 - i * 35, 165, 0.11, 'square', 0.18, d)); },
@@ -370,23 +370,26 @@ const Sfx = (() => {
     defeat() { [330, 262, 196, 131].forEach((f, i) => tone(f, f * 0.93, 0.32, 'sine', 0.22, i * 0.24)); },
     startRay() {
       if (!ctx || rayOsc) return;
-      rayOsc = ctx.createOscillator(); rayGain = ctx.createGain();
-      rayOsc.type = 'sawtooth'; rayOsc.frequency.value = 96;
-      rayLfo = ctx.createOscillator(); rayLfo.frequency.value = 9;
-      const lfoG = ctx.createGain(); lfoG.gain.value = 22;
-      rayLfo.connect(lfoG); lfoG.connect(rayOsc.frequency);
+      // 柔和奶感光束：三角波纯五度叠层 + 低通滤高频毛刺 + 缓颤低增益（替换原锯齿蜂鸣，不再刺耳）
+      rayGain = ctx.createGain();
+      rayOsc = ctx.createOscillator(); rayOsc.type = 'triangle'; rayOsc.frequency.value = 174;
+      rayOsc2 = ctx.createOscillator(); rayOsc2.type = 'triangle'; rayOsc2.frequency.value = 261;
+      rayLfo = ctx.createOscillator(); rayLfo.frequency.value = 4.5;
+      const lfoG = ctx.createGain(); lfoG.gain.value = 5; // 缓慢微颤
+      rayLfo.connect(lfoG); lfoG.connect(rayOsc.frequency); lfoG.connect(rayOsc2.frequency);
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 720; lp.Q.value = 0.7;
       rayGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      rayGain.gain.exponentialRampToValueAtTime(0.13, ctx.currentTime + 0.15);
-      rayOsc.connect(rayGain); rayGain.connect(master);
-      rayOsc.start(); rayLfo.start();
+      rayGain.gain.exponentialRampToValueAtTime(0.075, ctx.currentTime + 0.2);
+      rayOsc.connect(lp); rayOsc2.connect(lp); lp.connect(rayGain); rayGain.connect(master);
+      rayOsc.start(); rayOsc2.start(); rayLfo.start();
     },
     stopRay() {
       if (!rayOsc) return;
       try {
         rayGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
-        rayOsc.stop(ctx.currentTime + 0.2); rayLfo.stop(ctx.currentTime + 0.2);
+        rayOsc.stop(ctx.currentTime + 0.2); rayOsc2.stop(ctx.currentTime + 0.2); rayLfo.stop(ctx.currentTime + 0.2);
       } catch (e) {}
-      rayOsc = null; rayGain = null; rayLfo = null;
+      rayOsc = null; rayOsc2 = null; rayGain = null; rayLfo = null;
     }
   };
 })();
