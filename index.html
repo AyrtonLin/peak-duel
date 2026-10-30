@@ -2419,9 +2419,9 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const slaMk = (t) => { // 奶鼠横向轮廓系数（底部宽 0.98 → 肚 0.8 → 颈 0.62 → 头 0.62 → 冠 0.44；颈/冠高斯收窄，梨形下宽上窄）
     const u = Math.max(0.001, (t - 0.05) / 0.95);
     return 0.98 - 0.54 * Math.pow(u, 1.5)
-      - 0.05 * Math.exp(-Math.pow((t - 0.96) / 0.09, 2))
+      - 0.035 * Math.exp(-Math.pow((t - 0.96) / 0.10, 2))
       - 0.058 * Math.exp(-Math.pow((t - 0.72) / 0.065, 2))
-      + 0.04 * Math.exp(-Math.pow((t - 0.82) / 0.14, 2));
+      + 0.04 * Math.exp(-Math.pow((t - 0.82) / 0.14, 2)); // （冠收窄 0.05→0.035：顶部更饱满圆拱，仅微调头形；颈/腹不受影响）
   };
   const slaMny = (y, t) => { // 奶鼠竖向重映射（底部微圆、头顶抬升；ny>0.90 冠部软限幅压平头顶，无折痕）
     let ny = y + 0.09 * Math.exp(-Math.pow((y + 1) / 0.26, 2)) - 0.15 * Math.exp(-Math.pow((y - 1) / 0.24, 2)) + 0.15 * Math.exp(-Math.pow((t - 0.95) / 0.18, 2));
@@ -2454,7 +2454,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const slaHeadK = (w) => { // 头部收缩：自颈基 2.02 宽入缓收（跨度 0.58 至 ×0.70）——对照参考图颈部厚实、头从肩背平滑隆起，无"细颈+球头"台阶；头顶鼓起减弱为 +9%
     const x = (w - 2.02) / 0.58;
     const s = x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
-    return (1 - 0.30 * s) * (1 + 0.09 * Math.exp(-Math.pow((w - 2.45) / 0.32, 2))); // 球形鼓起包络（中脸轻鼓，向颈/头顶平滑衰减）
+    return (1 - 0.30 * s) * (1 + 0.09 * Math.exp(-Math.pow((w - 2.38) / 0.40, 2))); // 球形鼓起包络（峰值下移加宽=蛋形圆润中脸/全腮，幅度不变不改大小）
   };
   const slaHeadFwd = 0.30, slaHeadFwdSpan = 0.55; // 头部前移量 / 渐变跨度（对照参考图：头颅更靠前）
   const slaHeadZ = (w) => { // 头部前移偏移（sp 系 +Z）：颈基 0 → 头部全量（smoothstep 渐入，颈身连接曲线光滑无折角）
