@@ -2224,10 +2224,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   const puL = mesh(pupilGeo, mPup, 0, 0, 0.045);
   const puR = mesh(pupilGeo, mPup, 0, 0, 0.045);
   F.eyeL.add(puL); F.eyeR.add(puR); // 挂眼睛下：眨眼时瞳孔随眼皮一起压扁
-  F.pupils.push(puL, puR);
-  const glintGeo = new THREE.SphereGeometry(0.025, 8, 6);
-  puL.add(mesh(glintGeo, mGlint, -0.025, 0.035, 0.06));
-  puR.add(mesh(glintGeo, mGlint, -0.025, 0.035, 0.06));
+  F.pupils.push(puL, puR); // （高光点已删：黑色瞳孔保持纯黑无反光点）
   // 喙包（参考图嘴下的下巴隆起剪影，同体色）
   const bill = mesh(new THREE.SphereGeometry(0.2, 14, 10), mBody, 0, 1.22, 0.74);
   bill.scale.set(1.1, 0.35, 0.5);
