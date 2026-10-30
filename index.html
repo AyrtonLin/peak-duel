@@ -2525,7 +2525,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
   });
   // 嘴：贴头面前表面的水平直线嘴管（拉平：无弧度等高线；沿面逐点采样生成，不穿模不悬浮）
   {
-    const mouthW = 0.145, mouthY = 2.60, tubeR = 0.022, lift0 = 0.018; // 拉平直线嘴，再上移贴近眼下（眼 2.74/嘴 2.60）
+    const mouthW = 0.145, mouthY = 2.60, tubeR = 0.015, lift0 = 0.018; // 拉平直线嘴变细（口径 0.022→0.015），再上移贴近眼下（眼 2.74/嘴 2.60）
     const pivotZ = slaSurf(0, mouthY) + lift0;
     const pts = [];
     for (let i = 0; i <= 24; i++) {
@@ -2762,6 +2762,10 @@ function applyFrogPhase(n) {
   F.aura.visible = !hasGlb && n >= 3 && !F.sla.visible;
   Models.frogHolders.forEach((h, i) => { if (h) h.visible = (i === n - 1); });
   if (n === 3) F.pupils.forEach(p => { p.material = std(0xffc23a, { emissive: 0xcc7700 }); });
+  if (F.slaEyes) { // 奶斯拉眼/瞳孔复位为正圆（清除死亡/变身遗留的压扁状态：死亡表情 1.5,1.5,0.25 不应带入下一形态）
+    F.slaEyes.forEach(e => e.scale.set(1, 1, 1));
+    F.slaPupils.forEach(p => p.scale.set(1, 1, 1));
+  }
   // 嘴前锚点/蓄力球随当前模型面部高度（root 坐标；三阶随头部前移+球面鼓起 +0.23）
   F.mouthAnchor.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.82 : n === 3 ? 0.79 : 1.05);
   F.chargeOrb.position.set(0, n === 2 ? 1.56 : n === 3 ? 2.26 : 1.3, n === 2 ? 0.9 : n === 3 ? 0.89 : 1.14);
