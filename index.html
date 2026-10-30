@@ -2539,7 +2539,7 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     sp.add(F.slaMouth);
   }
   // 手臂：加粗圆台形一节直臂（肩端粗→掌端细）+ 灰绿色球形手掌（无手指），姿态前伸（略外张下压）
-  const mSlaHand = std(0x8b9e82, { roughness: 0.55 });
+  const mSlaHand = std(0x5c6b52, { roughness: 0.55 }); // 深灰绿（手掌+脚掌统一色；对照参考图爪部深灰绿）
   F.mats.push(mSlaHand); // 受击红闪同步
   F.slaArms = [];
   [[-1, -0.64], [1, 0.64]].forEach(([sd, ax]) => {
@@ -2575,11 +2575,11 @@ const F = { root: null, body: null, eyeL: null, eyeR: null, pupils: [], mouth: n
     ankle.position.set(0, -0.56, 0);
     ankle.rotation.x = -1.12; // 基姿补偿（= 基姿大腿角 1.05 - 膝折 2.17）
     ankle.rotation.z = -sd * 0.25; // 抵消腿外张（脚掌朝前）
-    const foot = mesh(new THREE.SphereGeometry(0.24, 12, 10), mSlaBody, 0, -0.08, 0.10);
+    const foot = mesh(new THREE.SphereGeometry(0.24, 12, 10), mSlaHand, 0, -0.08, 0.10); // 脚掌深灰绿（与手掌同色）
     foot.scale.set(1.0, 0.36, 1.5);
     ankle.add(foot);
     [[-0.13], [0], [0.13]].forEach(([tx], ti) => {
-      const toe = mesh(new THREE.SphereGeometry(0.075, 8, 6), mSlaBody, tx, -0.09, 0.44 - ti * 0.04);
+      const toe = mesh(new THREE.SphereGeometry(0.075, 8, 6), mSlaHand, tx, -0.09, 0.44 - ti * 0.04); // 脚趾深灰绿
       toe.scale.set(0.9, 0.62, 1.1);
       ankle.add(toe);
     });
