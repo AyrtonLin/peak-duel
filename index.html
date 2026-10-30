@@ -338,8 +338,16 @@ const Sfx = (() => {
   let rayOsc = null, rayGain = null, rayLfo = null;
   return {
     init,
-    shoot() { noise(0.06, 0.3, 2600, 'bandpass'); tone(210, 60, 0.08, 'square', 0.1); },
-    hit() { tone(540, 270, 0.09, 'triangle', 0.2); },
+    shoot() { // 枪响三层：脆响「嚓」+ 低频尾「磅」+ 身体「咚」
+      noise(0.05, 0.35, 2800, 'bandpass');
+      noise(0.16, 0.22, 1000, 'lowpass', 0.01, 160);
+      tone(190, 50, 0.12, 'square', 0.12, 0.005);
+    },
+    hit() { // 受击短促分层 splat：主「啪」+ 次层「咕」+ 湿润噪声
+      tone(520, 240, 0.07, 'triangle', 0.22);
+      tone(360, 160, 0.06, 'square', 0.14, 0.015);
+      noise(0.09, 0.2, 1600, 'bandpass', 0.01, 700);
+    },
     ricochet() { tone(2400, 1300, 0.1, 'sine', 0.14); tone(3150, 2100, 0.07, 'sine', 0.09, 0.02); },
     hurt() { tone(170, 70, 0.16, 'sawtooth', 0.28); noise(0.08, 0.1, 500); },
     jump() { tone(250, 660, 0.22, 'sine', 0.26); tone(380, 980, 0.18, 'sine', 0.1, 0.03); },
@@ -353,7 +361,7 @@ const Sfx = (() => {
     repelWarn() { tone(190, 780, 0.32, 'sawtooth', 0.22); noise(0.3, 0.1, 900, 'bandpass'); },
     repelHit() { tone(130, 38, 0.5, 'sine', 0.42); noise(0.3, 0.32, 600, 'lowpass', 0, 80); tone(560, 240, 0.12, 'square', 0.15, 0.02); },
     phase() { [420, 540, 680, 860].forEach((f, i) => tone(f, f * 1.12, 0.16, 'triangle', 0.2, i * 0.09)); },
-    frogDown() { tone(300, 55, 0.5, 'sawtooth', 0.28); noise(0.4, 0.26, 320); [0, 0.22, 0.38].forEach((d, i) => tone(210 - i * 55, 70, 0.13, 'square', 0.18, d)); },
+    frogDown() { tone(300, 55, 0.5, 'sawtooth', 0.28); tone(90, 30, 0.7, 'sine', 0.3); noise(0.4, 0.26, 320); [0, 0.22, 0.38].forEach((d, i) => tone(210 - i * 55, 70, 0.13, 'square', 0.18, d)); },
     victory() { [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.22, 'triangle', 0.22, i * 0.14)); tone(1046, 1046, 0.65, 'sine', 0.18, 0.58); },
     defeat() { [330, 262, 196, 131].forEach((f, i) => tone(f, f * 0.93, 0.32, 'sine', 0.22, i * 0.24)); },
     startRay() {
@@ -473,6 +481,30 @@ let worldT = 0;
   g.lineWidth = 24; g.setLineDash([40, 28]);
   g.strokeStyle = 'rgba(255,90,90,.55)'; g.beginPath(); g.arc(512, 512, 476, 0, TAU); g.stroke();
   g.setLineDash([]);
+  // 中央徽记：同心圈 + 缠绕对角纹 + 四向辐条（对决仪式感）
+  g.strokeStyle = 'rgba(255,235,180,.4)'; g.lineWidth = 6;
+  g.beginPath(); g.arc(512, 512, 58, 0, TAU); g.stroke();
+  g.lineWidth = 3; g.strokeStyle = 'rgba(255,235,180,.25)';
+  g.beginPath(); g.arc(512, 512, 38, 0, TAU); g.stroke();
+  g.lineWidth = 5; g.beginPath(); // 双螺旋弧
+  g.arc(512, 512, 48, 0.4, Math.PI - 0.4); g.stroke();
+  g.beginPath(); g.arc(512, 512, 48, Math.PI + 0.4, TAU - 0.4); g.stroke();
+  for (let i = 0; i < 8; i++) { // 放射辐条：由徽记指向红线环
+    const an = i / 8 * TAU;
+    g.strokeStyle = 'rgba(255,235,180,' + (i % 2 ? 0.14 : 0.3) + ')';
+    g.lineWidth = 3;
+    g.beginPath(); g.moveTo(512 + Math.cos(an) * 78, 512 + Math.sin(an) * 78);
+    g.lineTo(512 + Math.cos(an) * 300, 512 + Math.sin(an) * 300); g.stroke();
+  }
+  g.beginPath(); g.moveTo(512, 212); g.lineTo(512, 244); g.moveTo(512, 780); g.lineTo(512, 812); // 南北短刻度
+  g.moveTo(212, 512); g.lineTo(244, 512); g.moveTo(780, 512); g.lineTo(812, 512); g.stroke();
+  // 碎石斑：弹道感散点（近圈密集）
+  for (let i = 0; i < 170; i++) {
+    const a = Math.random() * TAU, r = 90 + Math.random() * 380;
+    const x = 512 + Math.cos(a) * r, y = 512 + Math.sin(a) * r, s = rand(1, 3.2);
+    g.fillStyle = Math.random() < 0.5 ? 'rgba(105,88,60,' + rand(0.18, 0.4).toFixed(2) + ')' : 'rgba(215,225,190,' + rand(0.15, 0.35).toFixed(2) + ')';
+    g.beginPath(); g.ellipse(x, y, s, s * rand(0.55, 1), Math.random() * TAU, 0, TAU); g.fill();
+  }
   const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4;
   const ground = new THREE.Mesh(new THREE.CircleGeometry(CONFIG.world.arenaRadius + 2, 64), new THREE.MeshLambertMaterial({ map: tex }));
   ground.rotation.x = -Math.PI / 2;
@@ -693,6 +725,125 @@ const cloudSpin = new THREE.Group();
   grass.instanceMatrix.needsUpdate = true;
   if (grass.instanceColor) grass.instanceColor.needsUpdate = true;
   scene.add(grass);
+  /* —— 背景精细化追加：场外树林环 / 远景轮廓岛 / 太阳光轴 —— */
+  { // 树林环：场外 r24-34 一圈错落树冠（深绿剪影层次），围出竞技场纵深
+    const tT = std(0x7a5c3e), leafA = std(0x3f8a3c), leafB = std(0x4f9f46), leafC = std(0x356f30);
+    const lms = [leafA, leafB, leafC];
+    for (let i = 0; i < 26; i++) {
+      const a = i / 26 * TAU + rand(-0.1, 0.1), r = rand(24, 34);
+      const h = rand(1.0, 1.9);
+      const tr = mesh(new THREE.CylinderGeometry(0.16, 0.24, h, 6), tT, Math.sin(a) * r, h / 2, Math.cos(a) * r);
+      scene.add(tr);
+      const lm = lms[i % 3];
+      const c = mesh(new THREE.SphereGeometry(rand(0.8, 1.5), 8, 6), lm, Math.sin(a) * r, h + rand(0.6, 1.1), Math.cos(a) * r);
+      c.scale.y = rand(0.85, 1.15);
+      scene.add(c);
+    }
+  }
+  { // 轮廓岛：更远处雾色大块剪影，接在远山外圈增强地平线层次
+    const isleM = new THREE.MeshLambertMaterial({ color: 0x6f88a0 });
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * TAU + rand(-0.22, 0.22), r = rand(96, 126);
+      const g = new THREE.Group();
+      g.add(mesh(new THREE.ConeGeometry(rand(20, 34), rand(10, 20), 7), isleM, 0, rand(4, 8), 0));
+      g.add(mesh(new THREE.SphereGeometry(rand(10, 16), 7, 5), isleM, rand(-10, 10), rand(2, 5), rand(-8, 8)));
+      g.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
+      scene.add(g);
+    }
+  }
+  { // 太阳光轴：放射光斑 sprite 挂在太阳方向，加色叠加出晨光光路
+    const sc = document.createElement('canvas'); sc.width = sc.height = 128;
+    const sg = sc.getContext('2d');
+    const rg = sg.createRadialGradient(64, 64, 2, 64, 64, 62);
+    rg.addColorStop(0, 'rgba(255,250,220,0.95)');
+    rg.addColorStop(0.25, 'rgba(255,236,170,0.5)');
+    rg.addColorStop(0.6, 'rgba(255,220,140,0.18)');
+    rg.addColorStop(1, 'rgba(255,210,120,0)');
+    sg.fillStyle = rg; sg.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 16; i++) { // 光芒细针
+      sg.strokeStyle = 'rgba(255,240,190,' + rand(0.05, 0.16).toFixed(2) + ')';
+      sg.lineWidth = rand(1, 3);
+      const an = Math.random() * TAU, len = rand(30, 62);
+      sg.beginPath(); sg.moveTo(64, 64); sg.lineTo(64 + Math.cos(an) * len, 64 + Math.sin(an) * len); sg.stroke();
+    }
+    const sunSp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
+    sunSp.position.set(60, 62, 40); // 沿 sun.position 方向推远至视野内高位
+    sunSp.scale.set(46, 46, 1);
+    scene.add(sunSp);
+  }
+})();
+
+/* ---------- 竞技场装备细节：油桶 / 沙袋 / 弹药箱 / 记分牌 / 旗绳（低面数免动画） ---------- */
+(function buildProps() {
+  const R = CONFIG.world.arenaRadius;
+  // 加油桶×4：红/青两队油桶对角布点（桶身钢色 + 中带队色 + 顶盖）
+  [[13.5, 4.5, 0xc23b2e], [-12.5, -5, 0x2e8fa8], [5, -14, 0xc23b2e], [-6, 13.8, 0x2e8fa8]].forEach(p => {
+    const steel = std(0x7d858a, { roughness: 0.5 });
+    const bandM = std(p[2], { roughness: 0.45 });
+    const b = mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.05, 14), steel, p[0], 0.52, p[1]);
+    b.castShadow = true;
+    scene.add(b);
+    scene.add(mesh(new THREE.CylinderGeometry(0.43, 0.43, 0.28, 14), bandM, p[0], 0.55, p[1])); // 队色环带
+    scene.add(mesh(new THREE.CylinderGeometry(0.43, 0.43, 0.28, 14), bandM, p[0], 0.86, p[1])); // 双环带层次
+    scene.add(mesh(new THREE.CylinderGeometry(0.38, 0.44, 0.06, 14), std(0x5a6166), p[0], 1.08, p[1])); // 凸顶盖
+    // 桶体棱箍凹痕（薄暗环）
+    scene.add(mesh(new THREE.CylinderGeometry(0.425, 0.425, 0.04, 14), std(0x565d61), p[0], 0.25, p[1]));
+    scene.add(mesh(new THREE.CylinderGeometry(0.425, 0.425, 0.04, 14), std(0x565d61), p[0], 0.78, p[1]));
+  });
+  // 沙袋堆×2：梯形三层叠（拉伸米黄球袋），放两侧作掩体点
+  [[-14.5, 5.5], [14.8, -5.8]].forEach(p => {
+    const bagM = std(0xd6c693, { roughness: 0.9 }), bagM2 = std(0xc7b57e, { roughness: 0.9 });
+    for (let row = 0; row < 3; row++) {
+      const n = 3 - row;
+      for (let i = 0; i < n; i++) {
+        const x = p[0] + (i - (n - 1) / 2) * 0.78 + rand(-0.05, 0.05);
+        const y = 0.2 + row * 0.38;
+        const bag = mesh(new THREE.SphereGeometry(0.36, 10, 8), row % 2 ? bagM : bagM2, x, y, p[1] + rand(-0.08, 0.08));
+        bag.scale.set(1.3, 0.55, 0.9);
+        bag.castShadow = true;
+        scene.add(bag);
+      }
+    }
+  });
+  // 围栏弹药箱：贴边排放的开盖弹药木箱（内衬黄铜弹链点缀）
+  const boxM = std(0x77624a, { roughness: 0.85 }), lidM = std(0x8a7156);
+  [[17.4, -1.2, -Math.PI / 2.4], [-18.1, 2.2, Math.PI / 2.1], [1.5, 18.3, 0.35]].forEach(p => {
+    const box = new THREE.Group();
+    box.add(mesh(new THREE.BoxGeometry(0.9, 0.5, 0.55), boxM, 0, 0.25, 0));
+    box.add(mesh(new THREE.BoxGeometry(0.95, 0.05, 0.6), lidM, 0, 0.52, -0.24)); // 半开着地盖板
+    box.children[1].rotation.x = -1.15;
+    box.add(mesh(new THREE.BoxGeometry(0.7, 0.06, 0.34), std(0xd9b44a, { roughness: 0.4 }), 0, 0.42, 0.02)); // 黄铜弹层
+    box.position.set(p[0], 0, p[1]);
+    box.rotation.y = p[2];
+    box.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    scene.add(box);
+  });
+  // 记分牌：红蓝对战记分（圆形扣分灯盘 + 立牌泡沫胜利横幅）
+  const sb = new THREE.Group();
+  sb.add(mesh(new THREE.CylinderGeometry(0.07, 0.1, 2.4, 8), std(0x4a5560), 0, 1.2, 0));
+  const board = mesh(new THREE.BoxGeometry(2.6, 1.3, 0.12), std(0x30281e, { roughness: 0.85 }), 0, 2.7, 0);
+  sb.add(board);
+  [[-0.7, 0xd94f43], [0.7, 0x4a8fd9]].forEach(lp => { // 红侧 / 蓝侧分数灯
+    const g2 = mesh(new THREE.CircleGeometry(0.38, 16), new THREE.MeshBasicMaterial({ color: lp[1] }), lp[0], 2.7, 0.07);
+    sb.add(g2);
+    for (let i = 0; i < 4; i++) sb.add(mesh(new THREE.CircleGeometry(0.09, 8), new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.85 }), lp[0] + -0.17 + i * 0.115, 2.32, 0.07)); // 点数刻度灯
+  });
+  sb.add(mesh(new THREE.BoxGeometry(2.4, 0.16, 0.1), std(0xfacc40), 0, 3.42, 0)); // 顶横幅
+  sb.position.set(-3.5, 0, R - 1.9);
+  sb.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  scene.add(sb);
+  // 场外旗绳：两端系在围栏柱上、垂挂双队三角旗（静止低面）
+  const fm = [std(0xd94f43), std(0x4a8fd9)];
+  [[1, -1], [-1, 1]].forEach(dd => {
+    const x0 = dd[0] * (R - 0.5), z0 = dd[1] * 4, x1 = dd[0] * (R - 0.5), z1 = dd[1] * 13;
+    for (let i = 0; i < 7; i++) {
+      const t = (i + 0.5) / 7;
+      const sag = Math.sin(t * Math.PI) * 0.5; // 下垂弧
+      const f = mesh(new THREE.ConeGeometry(0.14, 0.32, 4), fm[i % 2], x0, 2.1 - sag, z0 + (z1 - z0) * t);
+      f.rotation.x = Math.PI; // 尖朝下挂旗
+      scene.add(f);
+    }
+  });
 })();
 
 /* ---------- 地标与生灵：风车 / 奶塘 / 热气球 / 飞鸟 / 漂浮花粉 ---------- */
@@ -944,6 +1095,55 @@ const Particles = (() => {
     points.geometry.attributes.color.needsUpdate = true;
   }
   return { spawn, update };
+})();
+
+/* ================= 击败特效（三层冲击环 + 白闪球 + 三波彩屑 + 镜头冲撞） ================= */
+const DefeatFX = (() => {
+  const ringCols = [0xfff3cf, 0xffd76a, 0xffb050]; // 内亮外暖三层
+  const rings = ringCols.map((c, i) => {
+    const m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const g = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06 + i * 0.02, 8, 48), m); // 内环细外环粗：层次
+    g.rotation.x = Math.PI / 2; // 水平扩散
+    g.visible = false;
+    scene.add(g);
+    return { g, m, t0: i * 0.12 }; // 三环递延时 0 / 0.12 / 0.24s
+  });
+  const flash = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  flash.visible = false;
+  scene.add(flash);
+  let life = 99; // >DUR 即空闲
+  const DUR = 0.95;
+  function burst(x, y, z) {
+    life = 0;
+    rings.forEach(r => { r.g.visible = true; r.g.position.set(x, 0.15, z); r.g.scale.setScalar(0.4); r.m.opacity = 0; });
+    flash.position.set(x, y, z); flash.scale.setScalar(0.3); flash.visible = true; flash.material.opacity = 0.85;
+    // 三波彩屑：密爆（黄白）→ 抛洒（橘金疏层）→ 慢浮（奶白细屑）
+    Particles.spawn(x, y, z, 26, { color: 0xffe27a, color2: 0xfff6e0, speed: 6.5, up: 3.2, life: 0.7, grav: 5, drag: 1.6, jitter: 0.5 });
+    Particles.spawn(x, y + 0.4, z, 14, { color: 0xffb050, color2: 0xffe27a, speed: 4, up: 2, life: 1.1, grav: 4, jitter: 0.8 });
+    Particles.spawn(x, y + 0.8, z, 10, { color: 0xfff6e0, color2: 0xffd76a, speed: 2.2, up: 1.2, life: 1.6, grav: 2.2, jitter: 1.0 });
+    game.fovKick = 1.2; // 镜头 FOV 冲撞（主循环已有衰减恢复逻辑）
+    Shake.add(0.85);
+  }
+  function update(dt) {
+    if (life > DUR) return;
+    life += dt;
+    if (flash.visible) { // 白闪球：0.22s 膨胀 + 快淡
+      const k = life / 0.22;
+      flash.scale.setScalar(0.3 + Math.min(1, k) * 2.6);
+      flash.material.opacity = Math.max(0, 0.85 * (1 - k));
+      if (k >= 1) flash.visible = false;
+    }
+    rings.forEach(r => { // 冲击环：0.55s 扩散至 r9，缓出淡出
+      const t = life - r.t0;
+      if (t < 0) return;
+      const k = t / 0.55;
+      if (k >= 1) { r.g.visible = false; return; }
+      r.g.scale.setScalar(0.4 + (1 - Math.pow(1 - k, 2)) * 8.6); // 二次缓出扩散
+      r.m.opacity = 0.75 * (1 - k) * (1 - k);
+    });
+  }
+  return { burst, update };
 })();
 
 /* ================= 世界坐标弹出文字 ================= */
@@ -3695,6 +3895,7 @@ function startVictory() {
   F.chargeOrb.visible = false;
   Cheeses.reset();
   Sfx.frogDown();
+  DefeatFX.burst(frog.pos.x, (frog.center ? frog.center.y : 1.4), frog.pos.z); // 击败爆发演出
   Shake.add(0.6);
   game.state = 'ending'; game.pendingEnd = 1.8; game.win = true; game.victoryPlayed = false;
   player.celebrate = true;
@@ -4111,6 +4312,7 @@ function tick(now) {
     Bullets.update(dt);
     Cheeses.update(dt);
     Ghosts.update(dt, false); // 残影已停用（玩家反馈：移动出现残影视为瑕疵，克隆池保留但不再生成）
+    DefeatFX.update(dt);
     if (game.state === 'ending') updateEnding(dt);
     updateHUD(dt);
     updateMsgs(dt);
