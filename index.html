@@ -88,9 +88,11 @@ body.touch #diffBadge { bottom: 166px; left: 16px; }
 #resultTitle.lose { color: #ff6b6b; }
 #resultStats { color: #e8f4ff; font-size: 16px; line-height: 2.1; background: rgba(10,16,22,.6); padding: 12px 36px; border-radius: 12px; margin-bottom: 26px; border: 1px solid rgba(255,255,255,.15); }
 #resultStats b { color: var(--gold); font-size: 18px; }
-#pauseScreen { background: rgba(6,10,16,.6); cursor: pointer; }
+#pauseScreen { background: rgba(6,10,16,.6); }
 #pauseScreen h2 { color: #fff; font-size: 32px; letter-spacing: 6px; margin: 0 0 8px; }
 #pauseScreen p { color: #9fb4c8; }
+#pauseScreen .bigBtn { margin-top: 18px; }
+#pauseScreen .bigBtn + .bigBtn { margin-top: 14px; box-shadow: 0 6px 0 #2c3a48, 0 10px 24px rgba(0,0,0,.5); }
 /* ---------- 移动端 ---------- */
 #mobileUI { display: none; }
 body.touch #mobileUI { display: block; }
@@ -208,7 +210,9 @@ body.touch.portrait #rotateHint { display: block; }
 </div>
 <div id="pauseScreen" class="screen" style="display:none">
   <h2>已暂停</h2>
-  <p>点击画面锁定鼠标，继续战斗</p>
+  <p>游戏画面已静止 · 点击「继续战斗」锁定鼠标回到战场</p>
+  <button class="bigBtn" id="btnResume" type="button">继续战斗</button>
+  <button class="bigBtn" id="btnPauseMenu" type="button" style="background:transparent;color:#cfe0ee;">返回主菜单</button>
 </div>
 <div id="mobileUI">
   <div id="joyBase"><div id="joyStick"></div></div>
@@ -3926,7 +3930,7 @@ const Ghosts = (() => {
 })();
 
 /* ================= 胜负流程 ================= */
-const game = { state: 'menu', time: 0, pendingEnd: 0, win: false, confettiT: 0, victoryPlayed: false, fovKick: 0 };
+const game = { state: 'menu', time: 0, pendingEnd: 0, win: false, confettiT: 0, victoryPlayed: false, fovKick: 0, paused: false };
 
 function startVictory() {
   if (game.state !== 'playing') return;
@@ -4099,12 +4103,28 @@ function requestPointerLock() {
 }
 document.addEventListener('pointerlockchange', () => {
   pointerLocked = document.pointerLockElement === dom.c;
-  if (!pointerLocked && game.state === 'playing') dom.pauseScreen.style.display = 'flex';
+  // ESC / 失锁 → 真暂停：游戏逻辑与画面全部冻结（主循环短路），弹出按钮面板
+  if (!pointerLocked && game.state === 'playing' && !game.paused) {
+    game.paused = true;
+    input.fire = false;
+    dom.pauseScreen.style.display = 'flex';
+  }
 });
 document.addEventListener('pointerlockerror', () => { lockFailed = true; });
-dom.pauseScreen.addEventListener('click', () => {
+dom.btnResume.addEventListener('click', e => { // 继续战斗：解冻并重新锁鼠标
+  e.stopPropagation();
+  game.paused = false;
   dom.pauseScreen.style.display = 'none';
   requestPointerLock();
+});
+dom.btnPauseMenu.addEventListener('click', e => { // 返回主菜单：结束本局回开始界面
+  e.stopPropagation();
+  game.paused = false;
+  dom.pauseScreen.style.display = 'none';
+  game.state = 'menu';
+  resetGame();
+  document.body.classList.remove('playing');
+  dom.startScreen.style.display = '';
 });
 dom.c.addEventListener('click', () => {
   if (game.state === 'playing' && !pointerLocked && !lockFailed) requestPointerLock();
@@ -4248,6 +4268,7 @@ function startGame() {
   document.body.classList.add('playing');
   dom.startScreen.style.display = 'none';
   dom.pauseScreen.style.display = 'none';
+  game.paused = false; // 从暂停回菜单或重开后开局，确保不在冻结态
   if (IS_TOUCH) tryFullscreen(true); // 手机开局进全屏并锁横屏（iOS 不支持则忽略）
   requestPointerLock();
   centerMsg('只打' + FROG_NAMES[frog.phase - 1] + '正面！背部会弹开子弹');
@@ -4342,6 +4363,10 @@ function tick(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   cloudSpin.rotation.y += dt * 0.008;
+  if (game.paused) { // 暂停：画面完全静止（仅保持渲染，所有逻辑与背景动画冻结）
+    renderer.render(scene, camera);
+    return;
+  }
   if (game.state === 'menu') {
     animateFrog(dt, false, 'normal');
     F.root.rotation.y = frog.yaw;
