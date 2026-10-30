@@ -100,6 +100,8 @@ body.touch .controls { display: none; }
 .mbtn { position: fixed; border-radius: 50%; z-index: 25; pointer-events: auto; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 16px; text-shadow: 0 1px 3px #000; touch-action: none; }
 #btnFire { right: 28px; bottom: 26px; width: 92px; height: 92px; background: rgba(255,80,60,.5); border: 3px solid rgba(255,120,90,.85); }
 #btnJump { right: 138px; bottom: 66px; width: 68px; height: 68px; background: rgba(80,170,255,.45); border: 3px solid rgba(120,200,255,.85); font-size: 14px; }
+#btnLock { right: 224px; bottom: 92px; width: 58px; height: 58px; background: rgba(80,200,130,.4); border: 3px solid rgba(130,255,185,.8); font-size: 13px; }
+#btnLock.on { background: rgba(255,190,60,.6); border-color: rgba(255,225,120,.9); }
 #loadError { display: none; position: fixed; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(180,20,20,.92); color: #fff; padding: 8px 20px; border-radius: 8px; z-index: 50; font-size: 14px; }
 /* ---------- 模型加载 ---------- */
 .modelRow { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; justify-content: center; }
@@ -212,6 +214,7 @@ body.touch.portrait #rotateHint { display: block; }
   <div id="joyBase"><div id="joyStick"></div></div>
   <div class="mbtn" id="btnFire">开火</div>
   <div class="mbtn" id="btnJump">跳跃</div>
+  <div class="mbtn" id="btnLock">锁定</div>
 </div>
 <div id="fsBtn" title="全屏">⛶</div>
 <div id="rotateHint">🔄 建议横屏游玩更爽</div>
@@ -1846,7 +1849,7 @@ function updatePlayer(dt) {
   // —— 视角锁定（点击中键或 Q 键切换开关）：开启时视角平滑追踪奶蛙（再点关闭恢复手动）——
   if (input.locked && !frog.dead) {
     const dx = frog.pos.x - player.pos.x, dz = frog.pos.z - player.pos.z;
-    const dy = frog.center.y - (player.pos.y + 1.5); // 1.5 ≈ 视线高度
+    const dy = (frog.center.y + frog.hitR * 0.42) - (player.pos.y + 1.5); // 锁定目标 = 奶蛙胸部（命中圆心 +0.42R 归锚胸膛；视野不再压低瞄准腹部低点；1.5 ≈ 视线高度）
     const tYaw = Math.atan2(dx, dz);
     const tPitch = clamp(Math.atan2(dy, Math.hypot(dx, dz)), pc.pitchMin, pc.pitchMax);
     let dYaw = tYaw - player.yaw;
@@ -3768,6 +3771,7 @@ function updateHUD(dt) {
   crossPulse = Math.max(0, crossPulse - dt * 5);
   dom.crosshair.style.setProperty('--sp', (8 + crossPulse * 14) + 'px');
   dom.crosshair.classList.toggle('locked', input.locked && game.state === 'playing' && !frog.dead); // 锁定指示
+  if (dom.btnLock) dom.btnLock.classList.toggle('on', input.locked && game.state === 'playing' && !frog.dead); // 手机锁定按钮状态高亮（Q/中键/按钮三路同步）
 }
 
 /* ================= 摄像机 ================= */
@@ -3931,6 +3935,11 @@ dom.btnFire.addEventListener('touchstart', e => { e.preventDefault(); input.fire
 dom.btnFire.addEventListener('touchend', e => { e.preventDefault(); input.fire = false; }, { passive: false });
 dom.btnJump.addEventListener('touchstart', e => { e.preventDefault(); input.jumpQueued = true; input.keys['Space'] = true; }, { passive: false });
 dom.btnJump.addEventListener('touchend', e => { e.preventDefault(); input.keys['Space'] = false; }, { passive: false });
+// 锁定按钮：点按切换视角锁定（同 Q/中键；目标=奶蛙胸部）
+dom.btnLock.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (game.state === 'playing' && !frog.dead) input.locked = !input.locked;
+}, { passive: false });
 
 /* ================= 游戏流程 ================= */
 function resetGame() {
