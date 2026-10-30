@@ -1124,6 +1124,13 @@ const P_HEAD_Y = PCFG.headY;
   const nose = mesh(new THREE.SphereGeometry(0.13, 16, 12), mNose, 0, -0.13, 0.5);
   nose.scale.set(1.4, 1.0, 0.78);
   P.head.add(nose);
+  // 咧嘴笑（参考图：鼻下褐色开口腔，圆角豁笑露出内腔）
+  const mMouthIn = std(0x692b14, { roughness: 0.6 });        // 口腔内暗棕褐（哑光）
+  P.mats.push(mMouthIn);                                     // 受击红闪同步
+  const mouth = mesh(new THREE.SphereGeometry(0.078, 14, 10), mMouthIn, 0, -0.305, 0.435);
+  mouth.scale.set(1.18, 0.8, 0.42);                          // 扁椭圆张嘴腔（贴脸面不悬浮）
+  mouth.rotation.x = -0.16;                                  // 上缘微前倾：咧嘴笑弧度
+  P.head.add(mouth);
   // 大眼（琥珀棕虹膜 + 大黑瞳 + 高光），眼周奶油浅斑（参考图眉眼斑）
   [-1, 1].forEach(sd => {
     const patch = mesh(new THREE.SphereGeometry(0.115, 12, 10), mBelly, sd * 0.225, 0.135, 0.34);
