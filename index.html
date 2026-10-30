@@ -3776,6 +3776,7 @@ function updateHUD(dt) {
 }
 
 /* ================= 摄像机 ================= */
+let lockLift = 0; // 锁定视角相机抬升量（平滑过渡：开启时抬到高位锁奶蛙胸部，关闭时平滑落回）
 const camLook = new THREE.Vector3();
 let menuT = 0;
 function updateCamera(dt) {
@@ -3795,6 +3796,9 @@ function updateCamera(dt) {
     player.pos.y + 1.2 + pc.camUp,
     player.pos.z - fz * pc.camBack + rz * pc.camRight
   );
+  const liftT = (input.locked && game.state === 'playing' && !frog.dead) ? 1.6 : 0; // 锁定激活 → 抬到高位（配合胸部锚点俯视中target）
+  lockLift += (liftT - lockLift) * Math.min(1, 8 * dt); // 指数平滑约 0.4 秒完成升降
+  _v1.y += lockLift;
   if (player.dead) _v1.y = Math.max(2.2, _v1.y - dt * 2);
   camera.position.set(
     damp(camera.position.x, _v1.x, 20, dt),
