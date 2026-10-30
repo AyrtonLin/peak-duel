@@ -361,7 +361,7 @@ const Sfx = (() => {
     repelWarn() { tone(190, 780, 0.32, 'sawtooth', 0.22); noise(0.3, 0.1, 900, 'bandpass'); },
     repelHit() { tone(130, 38, 0.5, 'sine', 0.42); noise(0.3, 0.32, 600, 'lowpass', 0, 80); tone(560, 240, 0.12, 'square', 0.15, 0.02); },
     phase() { [420, 540, 680, 860].forEach((f, i) => tone(f, f * 1.12, 0.16, 'triangle', 0.2, i * 0.09)); },
-    frogDown() { tone(300, 55, 0.5, 'sawtooth', 0.28); tone(90, 30, 0.7, 'sine', 0.3); noise(0.4, 0.26, 320); [0, 0.22, 0.38].forEach((d, i) => tone(210 - i * 55, 70, 0.13, 'square', 0.18, d)); },
+    frogDown() { tone(300, 55, 0.5, 'sawtooth', 0.28); tone(90, 30, 0.7, 'sine', 0.3); tone(70, 28, 0.5, 'sine', 0.25, 0.6); noise(0.4, 0.26, 320); noise(0.18, 0.16, 500, 'lowpass', 0.6, 120); [0, 0.22, 0.38].forEach((d, i) => tone(210 - i * 55, 70, 0.13, 'square', 0.18, d)); },
     victory() { [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.22, 'triangle', 0.22, i * 0.14)); tone(1046, 1046, 0.65, 'sine', 0.18, 0.58); },
     defeat() { [330, 262, 196, 131].forEach((f, i) => tone(f, f * 0.93, 0.32, 'sine', 0.22, i * 0.24)); },
     startRay() {
@@ -1112,12 +1112,30 @@ const DefeatFX = (() => {
     new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
   flash.visible = false;
   scene.add(flash);
+  // 地面放射环盘 ×2：平面波前（与竖向 Torus 错开维度），慢速贴地扩散
+  const groundRings = [0, 1].map(() => {
+    const m = new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const g = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.12, 48), m);
+    g.rotation.x = -Math.PI / 2;
+    g.position.y = 0.1;
+    g.visible = false;
+    scene.add(g);
+    return { g, m, t0: 0 };
+  });
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.95, 12, 16, 1, true), // 升腾 defeat 光柱：底粗顶细直筒
+    new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  pillar.visible = false;
+  scene.add(pillar);
   let life = 99; // >DUR 即空闲
-  const DUR = 0.95;
+  let dustDone = false;
+  const DUR = 1.15;
   function burst(x, y, z) {
-    life = 0;
+    life = 0; dustDone = false;
     rings.forEach(r => { r.g.visible = true; r.g.position.set(x, 0.15, z); r.g.scale.setScalar(0.4); r.m.opacity = 0; });
+    groundRings.forEach((r, i) => { r.t0 = i * 0.18; r.g.visible = true; r.g.position.set(x, 0.1, z); r.g.scale.setScalar(1); r.m.opacity = 0; });
     flash.position.set(x, y, z); flash.scale.setScalar(0.3); flash.visible = true; flash.material.opacity = 0.85;
+    pillar.position.set(x, 6, z);
+    pillar.visible = true; pillar.material.opacity = 0.5;
     // 三波彩屑：密爆（黄白）→ 抛洒（橘金疏层）→ 慢浮（奶白细屑）
     Particles.spawn(x, y, z, 26, { color: 0xffe27a, color2: 0xfff6e0, speed: 6.5, up: 3.2, life: 0.7, grav: 5, drag: 1.6, jitter: 0.5 });
     Particles.spawn(x, y + 0.4, z, 14, { color: 0xffb050, color2: 0xffe27a, speed: 4, up: 2, life: 1.1, grav: 4, jitter: 0.8 });
@@ -1134,6 +1152,16 @@ const DefeatFX = (() => {
       flash.material.opacity = Math.max(0, 0.85 * (1 - k));
       if (k >= 1) flash.visible = false;
     }
+    if (pillar.visible) { // 光柱：0.45s 内快速淡出（点亮感）
+      const k = life / 0.45;
+      pillar.material.opacity = Math.max(0, 0.5 * (1 - k));
+      pillar.scale.set(1 + k * 0.6, 1, 1 + k * 0.6); // 微外扩
+      if (k >= 1) pillar.visible = false;
+    }
+    if (!dustDone && life > 0.55) { // 二段上升金尘：爆发后余韵漂浮
+      dustDone = true;
+      Particles.spawn(pillar.position.x, 0.4, pillar.position.z, 16, { color: 0xffe27a, color2: 0xfff6e0, speed: 1.4, up: 2.6, life: 1.3, grav: -0.6, drag: 1.4, jitter: 1.6 });
+    }
     rings.forEach(r => { // 冲击环：0.55s 扩散至 r9，缓出淡出
       const t = life - r.t0;
       if (t < 0) return;
@@ -1141,6 +1169,14 @@ const DefeatFX = (() => {
       if (k >= 1) { r.g.visible = false; return; }
       r.g.scale.setScalar(0.4 + (1 - Math.pow(1 - k, 2)) * 8.6); // 二次缓出扩散
       r.m.opacity = 0.75 * (1 - k) * (1 - k);
+    });
+    groundRings.forEach(r => { // 地面波前：0.7s 扩散至 r15，慢速掠场
+      const t = life - r.t0;
+      if (t < 0) return;
+      const k = t / 0.7;
+      if (k >= 1) { r.g.visible = false; return; }
+      r.g.scale.setScalar(1 + (1 - Math.pow(1 - k, 2.2)) * 14);
+      r.m.opacity = 0.55 * (1 - k) * (1 - k);
     });
   }
   return { burst, update };
@@ -3126,6 +3162,11 @@ function deathAnimFrog(dt) {
     frog.starsDone = true;
     Particles.spawn(frog.pos.x, 1.6, frog.pos.z, 18, { color: 0xffe27a, color2: 0xffffff, speed: 4, up: 2.5, life: 1.2, grav: 3 });
   }
+  if (!frog.dustDone && frog.deathT > 0.62) { // 落地砸尘：翻倒结束接壤瞬间扬起一片尘土 + 短震
+    frog.dustDone = true;
+    Particles.spawn(frog.pos.x, 0.12, frog.pos.z, 10, { color: 0xcbb894, color2: 0xd9c9a0, speed: 3, up: 1.4, life: 0.55, grav: 6, jitter: 0.9 });
+    Shake.add(0.32);
+  }
   F.mats.forEach(m => m.emissive.setHex(0x000000));
 }
 function animateFrog(dt, moving, mode) {
@@ -3889,7 +3930,7 @@ const game = { state: 'menu', time: 0, pendingEnd: 0, win: false, confettiT: 0, 
 
 function startVictory() {
   if (game.state !== 'playing') return;
-  frog.dead = true; frog.deathT = 0; frog.starsDone = false;
+  frog.dead = true; frog.deathT = 0; frog.starsDone = false; frog.dustDone = false;
   frog.cast = null; frog.state = 'dead';
   hideBeam(); hideWaveRings();
   F.chargeOrb.visible = false;
