@@ -1849,7 +1849,7 @@ function updatePlayer(dt) {
   // —— 视角锁定（点击中键或 Q 键切换开关）：开启时视角平滑追踪奶蛙（再点关闭恢复手动）——
   if (input.locked && !frog.dead) {
     const dx = frog.pos.x - player.pos.x, dz = frog.pos.z - player.pos.z;
-    const dy = (frog.center.y + frog.hitR * 0.42) - (player.pos.y + 1.5); // 锁定目标 = 奶蛙胸部（命中圆心 +0.42R 归锚胸膛；视野不再压低瞄准腹部低点；1.5 ≈ 视线高度）
+    const dy = (frog.center.y + frog.hitR * 0.75) - (player.pos.y + 1.5); // 锁定锚点 = 奶奶蛙上胸/肩胸区（命中圆心 +0.75R）：相机不动，锁定时准心上抬、整体呈仰视胸膛
     const tYaw = Math.atan2(dx, dz);
     const tPitch = clamp(Math.atan2(dy, Math.hypot(dx, dz)), pc.pitchMin, pc.pitchMax);
     let dYaw = tYaw - player.yaw;
@@ -3776,7 +3776,6 @@ function updateHUD(dt) {
 }
 
 /* ================= 摄像机 ================= */
-let lockLift = 0; // 锁定视角相机抬升量（平滑过渡：开启时抬到高位锁奶蛙胸部，关闭时平滑落回）
 const camLook = new THREE.Vector3();
 let menuT = 0;
 function updateCamera(dt) {
@@ -3796,9 +3795,6 @@ function updateCamera(dt) {
     player.pos.y + 1.2 + pc.camUp,
     player.pos.z - fz * pc.camBack + rz * pc.camRight
   );
-  const liftT = (input.locked && game.state === 'playing' && !frog.dead) ? 1.6 : 0; // 锁定激活 → 抬到高位（配合胸部锚点俯视中target）
-  lockLift += (liftT - lockLift) * Math.min(1, 8 * dt); // 指数平滑约 0.4 秒完成升降
-  _v1.y += lockLift;
   if (player.dead) _v1.y = Math.max(2.2, _v1.y - dt * 2);
   camera.position.set(
     damp(camera.position.x, _v1.x, 20, dt),
