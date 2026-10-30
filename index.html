@@ -4110,8 +4110,7 @@ function tick(now) {
     updateFrog(dt);
     Bullets.update(dt);
     Cheeses.update(dt);
-    const ghostActive = !player.dead && (!player.grounded || player.gunRecoil > 0.25 || (input.fire && game.state === 'playing'));
-    Ghosts.update(dt, ghostActive);
+    Ghosts.update(dt, false); // 残影已停用（玩家反馈：移动出现残影视为瑕疵，克隆池保留但不再生成）
     if (game.state === 'ending') updateEnding(dt);
     updateHUD(dt);
     updateMsgs(dt);
