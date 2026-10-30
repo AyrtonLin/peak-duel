@@ -4066,7 +4066,7 @@ function updateCamera(dt) {
   } else if (camera.fov !== 62) { camera.fov = 62; camera.updateProjectionMatrix(); }
 }
 /* ================= 输入 ================= */
-let pointerLocked = false, lockFailed = false;
+let pointerLocked = false, lockFailed = false, lockFailTimer = 0;
 window.addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   input.keys[e.code] = true;
@@ -4110,7 +4110,11 @@ document.addEventListener('pointerlockchange', () => {
     dom.pauseScreen.style.display = 'flex';
   }
 });
-document.addEventListener('pointerlockerror', () => { lockFailed = true; });
+document.addEventListener('pointerlockerror', () => { // 锁失败自动恢复：Chrome 在 ESC 退锁后约 1.25s 内禁止重锁，稍后允许重试（不永久封死）
+  lockFailed = true;
+  if (lockFailTimer) clearTimeout(lockFailTimer);
+  lockFailTimer = setTimeout(() => { lockFailed = false; }, 1400);
+});
 dom.btnResume.addEventListener('click', e => { // 继续战斗：解冻并重新锁鼠标
   e.stopPropagation();
   game.paused = false;
@@ -4128,6 +4132,13 @@ dom.btnPauseMenu.addEventListener('click', e => { // 返回主菜单：结束本
 });
 dom.c.addEventListener('click', () => {
   if (game.state === 'playing' && !pointerLocked && !lockFailed) requestPointerLock();
+});
+window.addEventListener('keydown', e => { // ESC 兜底：指针未锁时（如重锁失败后）按键直接暂停，保证 ESC 任何情况下都有效
+  if (e.key === 'Escape' && game.state === 'playing' && !game.paused && !document.pointerLockElement) {
+    game.paused = true;
+    input.fire = false;
+    dom.pauseScreen.style.display = 'flex';
+  }
 });
 
 /* ---------- 触屏 ---------- */
