@@ -430,18 +430,45 @@ const Music = (() => {
    [80, 587.33, 4], [84, 659.26, 4], [88, 587.33, 3], [92, 493.88, 3],
    [96, 440.00, 3], [100, 493.88, 2], [104, 587.33, 3], [108, 493.88, 3],
    [112, 659.26, 12]].forEach(m => { MEL[m[0]] = { f: m[1], d: m[2] }; });
-  // —— 声部合成（短生命周期节点，全部进 out 总线） ——
-  function osc(type, f, t, dur, vol, f2, filtF, filtT) {
+  // —— 声部链（摇滚乐队配置：节奏吉他/主音吉他/贝斯各一条失真总线，共享波形整形器省节点） ——
+  let gtrIn = null, leadIn = null, bassIn = null;
+  function distCurveOf(k) { // tanh 软削波过载曲线（电子管失真近似）
+    const n = 257, c = new Float32Array(n), norm = Math.tanh(k);
+    for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / norm; }
+    return c;
+  }
+  function buildChains() {
+    if (gtrIn) return;
+    const mk = (k, peakF, peakG, lpF) => {
+      const input = ctx.createGain();
+      const ws = ctx.createWaveShaper(); ws.curve = distCurveOf(k); ws.oversample = '2x';
+      const pk = ctx.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = peakF; pk.gain.value = peakG; pk.Q.value = 0.9;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = lpF;
+      input.connect(ws); ws.connect(pk); pk.connect(lp); lp.connect(out);
+      return input;
+    };
+    gtrIn = mk(4.5, 1200, 6, 3800);  // 节奏吉他：重过载 + 中频存在感
+    leadIn = mk(2.6, 950, 7, 4200);  // 主音吉他：更亮、更歌唱
+    bassIn = mk(1.6, 700, 2, 360);   // 贝斯：轻微驱动收紧
+  }
+  // —— 声部合成 ——
+  function note(dest, type, f, t, dur, vol, opts) {
     const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type; o.frequency.setValueAtTime(f, t);
-    if (f2) o.frequency.exponentialRampToValueAtTime(Math.max(1, f2), t + dur);
+    o.type = type;
+    if (opts && opts.scoop) { o.frequency.setValueAtTime(f * opts.scoop, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.015); } // 拨弦起音回勾
+    else { o.frequency.setValueAtTime(f, t); }
+    if (opts && opts.f2) o.frequency.exponentialRampToValueAtTime(Math.max(1, opts.f2), t + dur);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(vol, t + (opts && opts.att ? opts.att : 0.005));
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    let node = o;
-    if (filtF) { const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = filtF; if (filtT) flt.frequency.exponentialRampToValueAtTime(filtT, t + dur); o.connect(flt); node = flt; }
-    node.connect(g); g.connect(out);
+    o.connect(g); g.connect(dest);
     o.start(t); o.stop(t + dur + 0.05);
+    if (opts && opts.vibrato) { // 揉弦（推弦感，音分级微颤）
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 5.6;
+      const lg = ctx.createGain(); lg.gain.value = opts.vibrato;
+      lfo.connect(lg); lg.connect(o.detune);
+      lfo.start(t + 0.1); lfo.stop(t + dur);
+    }
   }
   function nz(t, dur, vol, fc, type) {
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
@@ -456,32 +483,34 @@ const Music = (() => {
   }
   function playStep(s, t) {
     const bar = Math.floor(s / 16) % 8, st = s % 16, ch = CH[bar % 4];
-    // —— 鼓组（加洛普驱动） ——
-    if (st === 0 || st === 8 || st === 6 || st === 14) osc('sine', 165, t, 0.1, 0.55, 46, 0, 0); // 底鼓
-    if (st === 4 || st === 12) { nz(t, 0.09, 0.2, 1800, 'bandpass'); osc('sine', 195, t, 0.05, 0.07, 118); } // 军鼓
-    if (st % 2 === 0) nz(t, 0.03, st % 4 === 0 ? 0.07 : 0.045, 7200, 'highpass'); // 踩镲
-    if (s === 0 || s === 64) nz(t, 0.55, 0.11, 4200, 'highpass'); // 段落开镲
-    // —— 贝斯（八分驱动：根-根-八度-根-五度-根-八度-根） ——
-    if (st % 2 === 0) {
-      const mult = [1, 1, 2, 1, 1.5, 1, 2, 1][st / 2];
-      osc('sawtooth', ch[0] * mult, t, 0.11, 0.23, 0, 420);
+    const th = t + rand(-0.004, 0.004); // 微量人性时值抖动（去机器感）
+    // —— 鼓组（加洛普驱动，带鼓皮瞬态） ——
+    if (st === 0 || st === 8 || st === 6 || st === 14) {
+      note(out, 'sine', 150, th, 0.11, 0.55, { f2: 44, att: 0.001 }); // 底鼓身体
+      nz(th, 0.008, 0.14, 3200, 'highpass'); // 底鼓皮击瞬态
     }
-    // —— 强力和弦垫（每拍 1/3 重砸，失谐双锯增厚） ——
+    if (st === 4 || st === 12) {
+      nz(th, 0.12, 0.2, 1700, 'bandpass');
+      nz(th, 0.02, 0.09, 4600, 'highpass'); // 军鼓上层脆响
+      note(out, 'triangle', 190, th, 0.06, 0.09, { f2: 150, att: 0.001 }); // 军鼓鼓身
+    }
+    if (st % 2 === 0) nz(th, 0.024, st % 4 === 0 ? 0.055 : 0.035, 8400, 'highpass'); // 踩镲
+    if (s === 0 || s === 64) nz(t, 0.5, 0.1, 3600, 'highpass'); // 段落开镲
+    // —— 贝斯（八分驱动：根-根-八度-根-五度-根-八度-根，轻微过载收紧） ——
+    if (st % 2 === 0) note(bassIn, 'sawtooth', ch[0] * [1, 1, 2, 1, 1.5, 1, 2, 1][st / 2], th, 0.1, 0.2, { att: 0.004 });
+    // —— 节奏吉他：拍 1/3 强力和弦重砸 + 其余 16 分闷音墙（riff 驱动核心） ——
     if (st === 0 || st === 8) {
-      ch.forEach(f => {
-        osc('sawtooth', f * 2, t, 0.19, 0.055, 0, 1500);
-        osc('sawtooth', f * 2 * 1.004, t, 0.19, 0.05, 0, 1500);
-      });
+      ch.forEach((f, i) => note(gtrIn, 'sawtooth', f * 2, th, 0.2, 0.075 * (i ? 0.8 : 1), { att: 0.003 }));
+    } else {
+      note(gtrIn, 'sawtooth', ch[0] * 2, th, 0.062, 0.05 + (st % 4 === 0 ? 0.012 : 0), { att: 0.002 }); // 闷音 chug
+      note(gtrIn, 'sawtooth', ch[0] * 2 * 1.005, th, 0.062, 0.035, { att: 0.002 });
     }
-    // —— 16 分琶音（高八度和弦音循环，铺速度感） ——
-    osc('square', ch[[0, 2, 1, 2][st % 4]] * 2, t, 0.07, 0.05, 0, 2600);
-    // —— 主旋律（双锯失谐 + 滤波，热血领奏） ——
+    // —— 主旋律（主音失真吉他：拨弦回勾 + 揉弦，热血领奏） ——
     const m = MEL[s];
     if (m) {
       const dur = Math.min(m.d, 14) * STEP * 0.92;
-      osc('sawtooth', m.f, t, dur, 0.15, 0, 2800);
-      osc('sawtooth', m.f * 1.006, t, dur, 0.13, 0, 2800);
-      osc('square', m.f / 2, t, dur, 0.07, 0, 1400); // 低八度垫厚
+      note(leadIn, 'sawtooth', m.f, t, dur, 0.12, { att: 0.006, scoop: 0.982, vibrato: 9 });
+      note(leadIn, 'sawtooth', m.f * 1.007, t, dur, 0.1, { att: 0.006, scoop: 0.988, vibrato: 7 });
     }
   }
   function sched() {
@@ -503,6 +532,7 @@ const Music = (() => {
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     }
     if (!out) { out = ctx.createGain(); out.connect(ctx.destination); }
+    buildChains(); // 摇滚声部失真总线（节奏吉他/主音吉他/贝斯）
     out.gain.cancelScheduledValues(ctx.currentTime);
     out.gain.setValueAtTime(0.0001, ctx.currentTime);
     out.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 1.2); // 入场渐强
