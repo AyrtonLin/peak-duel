@@ -1306,7 +1306,7 @@ const player = {
   grounded: true, yaw: Math.PI, pitch: -0.06,
   hp: CONFIG.player.maxHp,
   fireCd: 0, jumpCd: 0, jumpInv: 0, invTimer: 0, hurtFlash: 0,
-  walkPhase: 0, gunRecoil: 0, flashTimer: 0, landSquash: 0, recoilSide: 1,
+  walkPhase: 0, gunRecoil: 0, gunRecoilV: 0, boltT: 0, flashTimer: 0, landSquash: 0, recoilSide: 1,
   knockTimer: 0, stunT: 0, dead: false, celebrate: false,
   stats: { shots: 0, hits: 0, ricochets: 0, dmgTaken: 0 }
 };
@@ -2077,6 +2077,11 @@ const P_HEAD_Y = PCFG.headY;
   P.muzzle = new THREE.Object3D();
   P.muzzle.position.copy(rifle.userData.points.muzzle.position);
   P.gun.add(P.muzzle);
+  P.ejectPort = new THREE.Object3D();
+  P.ejectPort.position.set(0.0445, 0.035, 0.06); // 对齐步枪抛壳口（receiverEjectionPort）
+  P.gun.add(P.ejectPort);
+  P.boltHandle = rifle.getObjectByName('receiverChargingHandle') || null; // 枪机循环（拉机柄后坐回位）
+  if (P.boltHandle) P.boltHandle.userData.z0 = P.boltHandle.position.z;
   P.armR.add(P.gun);
   visual.add(P.armR);
   // 枪口闪光
@@ -2168,13 +2173,25 @@ function shoot() {
   _v2.x += rand(-pc.spread, pc.spread); _v2.y += rand(-pc.spread, pc.spread); _v2.z += rand(-pc.spread, pc.spread);
   _v2.normalize();
   Bullets.spawn(_v1, _v2);
-  player.gunRecoil = 1;
+  player.gunRecoilV += 9;                            // 弹簧后坐冲量（瞬间冲击 → 回弹超调 → 收敛）
   player.recoilSide = -player.recoilSide; // 后坐扭矩方向逐发交替（右手腕外甩/内压）
-  player.flashTimer = 0.05;
+  player.boltT = 1;                                  // 枪机循环：拉机柄后坐 → 回位
+  player.flashTimer = 0.13;                          // 两段枪口焰：0~40ms 炽亮爆点 → 40~130ms 余烬扩散
   P.flash.rotation.z = Math.random() * TAU;
   const fs = rand(0.8, 1.3);
+  P.flash.userData.fs = fs;
   P.flash.scale.set(fs, fs, fs);
+  // 抛壳：黄铜弹壳从抛壳口旋出（沿枪身右向 + 上抛）
+  if (P.ejectPort && Shells.ready()) {
+    P.ejectPort.getWorldPosition(_v3);
+    _v4.set(1, 0, 0).transformDirection(P.gun.matrixWorld);
+    Shells.eject(_v3, _v4, _v2);
+  }
+  // 枪口烟：2 缕灰白烟随弹道方向飘散
+  Particles.spawn(_v1.x + _v2.x * 0.15, _v1.y + _v2.y * 0.15 + 0.03, _v1.z + _v2.z * 0.15, 2, { color: 0x8d8578, color2: 0xbdb4a4, speed: 0.9, up: 0.5, life: 0.5, grav: -1.1, drag: 2.6, jitter: 0.05 });
   player.pitch = clamp(player.pitch + 0.006, pc.pitchMin, pc.pitchMax);
+  player.yaw += rand(-0.0016, 0.0016);               // 逐发水平微扰（真实枪口扰动）
+  game.fovKick = Math.max(game.fovKick, 0.22);       // 相机逐发轻冲撞
   player.stats.shots++;
   crossPulse = 1;
   Sfx.shoot();
@@ -2261,10 +2278,33 @@ function updatePlayer(dt) {
     player.fireCd = 1 / pc.fireRate;
     shoot();
   }
-  player.gunRecoil = Math.max(0, player.gunRecoil - dt * 9);
+  // 后坐弹簧（欠阻尼：瞬间冲击 → 前冲超调 → 收敛，替代旧线性衰减）+ 枪机循环计时
+  player.gunRecoilV += (-150 * player.gunRecoil - 14 * player.gunRecoilV) * dt;
+  player.gunRecoil += player.gunRecoilV * dt;
+  if (Math.abs(player.gunRecoil) < 0.001 && Math.abs(player.gunRecoilV) < 0.02) { player.gunRecoil = 0; player.gunRecoilV = 0; }
+  player.gunRecoil = clamp(player.gunRecoil, -0.3, 1.2);
+  player.boltT = Math.max(0, player.boltT - dt * 14);
+  // 两段枪口焰：0~40ms 炽亮爆点（光 3.2）→ 40~130ms 余烬（膨胀 + 淡出 + 光衰减）
   player.flashTimer -= dt;
-  P.flash.visible = player.flashTimer > 0;
-  P.flashLight.intensity = player.flashTimer > 0 ? 2.4 : 0;
+  if (player.flashTimer > 0) {
+    const el = 0.13 - player.flashTimer;
+    P.flash.visible = true;
+    const fs = P.flash.userData.fs || 1;
+    if (el < 0.04) {
+      const k = el / 0.04;
+      P.flash.material.opacity = 1;
+      P.flash.scale.setScalar(fs * (1 + k * 0.5));
+      P.flashLight.intensity = 3.2 * (1 - k * 0.4);
+    } else {
+      const k = (el - 0.04) / 0.09;
+      P.flash.material.opacity = Math.max(0, 1 - k);
+      P.flash.scale.setScalar(fs * 1.5 * (1 + k * 0.45));
+      P.flashLight.intensity = 1.9 * (1 - k);
+    }
+  } else {
+    P.flash.visible = false;
+    P.flashLight.intensity = 0;
+  }
   // 应用到模型
   P.root.position.copy(player.pos);
   P.root.rotation.y = player.yaw;
@@ -2408,6 +2448,8 @@ function animatePlayer(dt, moving, iLen) {
   P.gun.position.y = 0.1 + (walking ? Math.sin(player.walkPhase * 2) * 0.016 : Math.sin(t * 2.2) * 0.008) + rc * 0.05;
   P.gun.position.x = rs * rc * 0.03;
   P.gun.rotation.x = rc * 0.16;
+  // 枪机循环：拉机柄随开火后坐 7cm 再回位（真实往复，~70ms 一循环）
+  if (P.boltHandle) P.boltHandle.position.z = P.boltHandle.userData.z0 - 0.07 * Math.min(1, player.boltT * 1.6);
   if (Models.gunHolder && Models.gunHolder.parent === P.armR) Models.gunHolder.position.z = P.gun.position.z;
   P.head.rotation.x = -player.pitch * 0.3 - rc * 0.06; // 头部随视角俯仰 + 开枪后仰
   // 受击红闪
@@ -2481,6 +2523,63 @@ const Bullets = (() => {
   }
   function reset() { act.forEach(b => { b.m.visible = false; }); act.length = 0; }
   return { spawn, update, reset };
+})();
+
+/* ================= 抛壳弹壳（真实开火动画：黄铜壳旋出 → 抛物线 → 落地弹跳 → 缩失） ================= */
+const Shells = (() => {
+  const POOL = 16;
+  const geo = new THREE.CylinderGeometry(0.011, 0.013, 0.046, 8);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.32, metalness: 0.78 });
+  const pool = [], act = [];
+  for (let i = 0; i < POOL; i++) {
+    const m = new THREE.Mesh(geo, mat);
+    m.visible = false;
+    m.castShadow = false;
+    scene.add(m);
+    pool.push(m);
+  }
+  function eject(pos, rightDir, fwdDir) {
+    let m = pool.find(x => !x.visible);
+    if (!m) { m = act[0] && act[0].m; if (!m) return; } // 池满复用最旧
+    m.visible = true;
+    m.position.copy(pos);
+    m.rotation.set(rand(0, TAU), rand(0, TAU), rand(0, TAU));
+    m.scale.setScalar(1);
+    const side = rand(0.8, 1.0);
+    act.push({
+      m: m,
+      vx: rightDir.x * (1.7 * side) + rand(-0.25, 0.25) + fwdDir.x * 0.35,
+      vy: 1.9 + rand(0, 0.8),
+      vz: rightDir.z * (1.7 * side) + rand(-0.25, 0.25) + fwdDir.z * 0.35,
+      rx: rand(-16, 16), ry: rand(-10, 10), rz: rand(-16, 16),
+      life: 1.3, bounced: false
+    });
+  }
+  function update(dt) {
+    for (let i = act.length - 1; i >= 0; i--) {
+      const s = act[i];
+      s.life -= dt;
+      if (s.life <= 0) { s.m.visible = false; act.splice(i, 1); continue; }
+      s.vy -= 11 * dt;
+      s.m.position.x += s.vx * dt;
+      s.m.position.y += s.vy * dt;
+      s.m.position.z += s.vz * dt;
+      s.m.rotation.x += s.rx * dt;
+      s.m.rotation.y += s.ry * dt;
+      s.m.rotation.z += s.rz * dt;
+      const gh = s.m.position.y < 0.4 ? terrainH(s.m.position.x, s.m.position.z) : 0;
+      if (s.m.position.y < gh + 0.012 && s.vy < 0) { // 落地：一次弹跳后减速躺平
+        s.m.position.y = gh + 0.012;
+        s.vy = s.bounced ? 0 : Math.abs(s.vy) * 0.3;
+        if (!s.bounced) { s.bounced = true; s.vx *= 0.4; s.vz *= 0.4; s.rx = 0; s.ry = 0; s.rz = 0; }
+        else { s.vx *= 0.8; s.vz *= 0.8; }
+      }
+      if (s.life < 0.25) s.m.scale.setScalar(Math.max(0.01, s.life / 0.25)); // 尾段缩小消失
+    }
+  }
+  function reset() { act.forEach(s => { s.m.visible = false; }); act.length = 0; }
+  function ready() { return true; }
+  return { eject, update, reset, ready };
 })();
 
 function onBulletHitFrog(b, hitPoint) {
@@ -4338,7 +4437,7 @@ function resetGame() {
   P.visual.position.y = 0;
   P.visual.scale.set(1, 1, 1); P.visual.rotation.set(0, 0, 0);
   P.stars.visible = false;
-  player.landSquash = 0; player.walkPhase = 0; player.gunRecoil = 0;
+  player.landSquash = 0; player.walkPhase = 0; player.gunRecoil = 0; player.gunRecoilV = 0; player.boltT = 0;
   frog.pos.set(0, 0, -9); frog.yaw = 0; frog.hp = ec.maxHp;
   frog.dead = false; frog.starsDone = false; frog.deathT = 0;
   frog.state = 'normal'; frog.cast = null; frog.flinch = 0; frog.blinkT = 2;
@@ -4353,7 +4452,7 @@ function resetGame() {
   F.mats.forEach(m => m.emissive.setHex(0x000000));
   hideBeam(); hideWaveRings();
   F.chargeOrb.visible = false;
-  Bullets.reset(); Cheeses.reset(); Ghosts.reset(); Shockwaves.reset();
+  Bullets.reset(); Shells.reset(); Cheeses.reset(); Ghosts.reset(); Shockwaves.reset();
   game.time = 0; game.pendingEnd = 0; game.win = false; game.fovKick = 0;
   dom.endScreen.style.display = 'none';
   dom.vignette.style.opacity = 0;
@@ -4450,6 +4549,9 @@ function warmupFirstShot() {
     _v2.copy(camera.position).addScaledVector(_v1, 6); // 镜头前 6 米的预热点
     Bullets.spawn(_v2, _v1);
     P.flash.visible = true;
+    P.flash.material.opacity = 1; // 预热渲染用不透明
+    _v3.set(0, 1, 0).cross(_v1).normalize(); // 相机右向（up × dir）
+    Shells.eject(_v2, _v3, _v1); // 抛壳材质/几何预热
     Ghosts.update(0.001, true);
     Shockwaves.spawn(_v2.x, _v2.z, 0xffe9a8, 1.5, 0.4);
     Cheeses.spawn(_v2.x, _v2.z);
@@ -4464,7 +4566,7 @@ function warmupFirstShot() {
     renderer.render(scene, camera); // 预编译渲染
     // —— 还原 ——
     P.flash.visible = false;
-    Bullets.reset(); Ghosts.reset(); Shockwaves.reset(); Cheeses.reset();
+    Bullets.reset(); Shells.reset(); Ghosts.reset(); Shockwaves.reset(); Cheeses.reset();
     hideBeam(); hideWaveRings();
     F.chargeOrb.visible = false;
     F.aura.visible = auraWas;
@@ -4490,6 +4592,7 @@ function tick(now) {
     updatePlayer(dt);
     updateFrog(dt);
     Bullets.update(dt);
+    Shells.update(dt);
     Cheeses.update(dt);
     Ghosts.update(dt, false); // 残影已停用（玩家反馈：移动出现残影视为瑕疵，克隆池保留但不再生成）
     DefeatFX.update(dt);
