@@ -1517,16 +1517,20 @@ const P_HEAD_Y = PCFG.headY;
       b.rotation.z = Math.PI / 2; // 轴向朝外
       helm.add(b);
     });
-    // NVG 前支架：方板 + 四螺栓 + 导槽（参考图盔体前上方）
+    // NVG 前支架：卡其大圆角方板 + 四螺栓 + 导槽（参考图正视图盔体前上方醒目 tan 底座）
     const nvg = new THREE.Group();
     nvg.position.set(0, PCFG.headR * 0.82, 0.4);
     nvg.rotation.x = -0.55;
-    nvg.add(mesh(new THREE.BoxGeometry(0.19, 0.09, 0.05), mStrap, 0, 0, 0.02));
-    [[-0.07, 0.026], [-0.07, -0.026], [0.07, 0.026], [0.07, -0.026]].forEach(v => {
+    nvg.add(mesh(new THREE.BoxGeometry(0.22, 0.115, 0.05), mTan, 0, 0, 0.02));
+    [[-0.08, 0.03], [-0.08, -0.03], [0.08, 0.03], [0.08, -0.03]].forEach(v => {
       nvg.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 8), mBuckle, v[0], v[1], 0.052));
     });
-    nvg.add(mesh(new THREE.BoxGeometry(0.05, 0.05, 0.06), mBuckle, 0, -0.055, -0.005)); // 铰接座
+    nvg.add(mesh(new THREE.BoxGeometry(0.055, 0.055, 0.06), mBuckle, 0, -0.062, -0.005)); // 铰接座
     helm.add(nvg);
+    // 盔后配重/魔术贴深色方袋（参考图背视图：盔后中下方深色方块）
+    const rearPad = mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), mStrap, 0, 0.16, -0.48);
+    rearPad.rotation.x = 0.42; // 贴壳后坡面
+    helm.add(rearPad);
     // 右侧轨挂载盒（参考图盔侧战术设备）
     const sideDev = new THREE.Group();
     sideDev.position.set(PCFG.headR + 0.085, 0.2, -0.02);
@@ -1647,16 +1651,23 @@ const P_HEAD_Y = PCFG.headY;
       const pts = bez3([sd * 0.14, 1.58, -0.42], [sd * 0.15, 1.2, -0.66], [sd * 0.05, 0.94, -0.6], 5);
       for (let i = 0; i < pts.length - 1; i++) visual.add(limb(pts[i], pts[i + 1], 0.03, 0.03, mStrap));
     });
+    // 胸前正中军绿魔术贴小贴片（参考图正视图：胸排上缘中央绿方块）
+    const frontPatch = mesh(new THREE.BoxGeometry(0.24, 0.09, 0.024), std(0x55592f, { roughness: 0.92 }), 0, 1.48, 0.63);
+    frontPatch.rotation.x = -0.14;
+    visual.add(frontPatch);
     // 背部 MOLLE 大板（参考图背视图：大迷彩板 + 三横织带 + 四角黑扣）
     const molle = new THREE.Group();
-    molle.position.set(0, 1.12, -0.66);
-    molle.rotation.x = 0.14;
+    molle.position.set(0, 1.28, -0.64);
+    molle.rotation.x = 0.1;
     molle.add(mesh(new THREE.BoxGeometry(0.86, 0.62, 0.06), mGear, 0, 0, 0));
-    [-0.18, 0, 0.18].forEach(ry => {
-      molle.add(mesh(new THREE.BoxGeometry(0.82, 0.035, 0.055), mStrap, 0, ry, 0.033));
+    const mPatchOlive = std(0x55592f, { roughness: 0.92 }); // 军绿魔术贴补丁（参考图背视图板中绿方块）
+    [-0.24, -0.12, 0.12, 0.24].forEach(ry => {
+      molle.add(mesh(new THREE.BoxGeometry(0.82, 0.035, 0.055), mStrap, 0, ry, -0.033));
     });
+    molle.add(mesh(new THREE.BoxGeometry(0.3, 0.15, 0.024), mPatchOlive, 0, 0, -0.043)); // 中央军绿贴片（外露背面）
+    molle.add(mesh(new THREE.BoxGeometry(0.82, 0.035, 0.055), mStrap, 0, 0, -0.055));   // 中行织带叠贴片之上
     [[-0.38, 0.25], [0.38, 0.25], [-0.38, -0.25], [0.38, -0.25]].forEach(c => {
-      molle.add(mesh(new THREE.BoxGeometry(0.07, 0.07, 0.035), mBuckle, c[0], c[1], 0.032));
+      molle.add(mesh(new THREE.BoxGeometry(0.07, 0.07, 0.035), mBuckle, c[0], c[1], -0.032));
     });
     visual.add(molle);
   })();
@@ -1683,8 +1694,17 @@ const P_HEAD_Y = PCFG.headY;
     canister.position.set(0.4, 1.0, 0.47); canister.rotation.set(0.12, 0.5, 0);
     canister.add(mesh(new THREE.CylinderGeometry(0.055, 0.062, 0.2, 12), mPouch, 0, 0, 0));
     canister.add(mesh(new THREE.TorusGeometry(0.058, 0.014, 6, 14), mBlack, 0, 0.055, 0));
+    canister.add(mesh(new THREE.BoxGeometry(0.028, 0.014, 0.006), mGlint, 0, 0.02, 0.064)); // 罐身白色标签（参考图小标）
     canister.children[canister.children.length - 1].rotation.x = Math.PI / 2;
     visual.add(canister);
+    // 左下徽章补片（参考图：左胸下袋面白色小徽补片 + 黑色简笔徽记）
+    const badge = new THREE.Group();
+    badge.position.set(-0.36, 0.86, 0.6); badge.rotation.set(-0.12, -0.3, 0);
+    badge.add(mesh(new THREE.BoxGeometry(0.11, 0.11, 0.018), mGlint, 0, 0, 0));
+    badge.add(mesh(new THREE.BoxGeometry(0.016, 0.062, 0.008), mBlack, 0, 0.006, 0.012));   // 徽记竖笔
+    badge.add(mesh(new THREE.BoxGeometry(0.05, 0.016, 0.008), mBlack, -0.006, 0.024, 0.012)); // 徽记横笔
+    badge.add(mesh(new THREE.BoxGeometry(0.04, 0.012, 0.008), mBlack, 0.014, -0.022, 0.012)); // 徽记斜笔
+    visual.add(badge);
     // 右胸大弹匣袋（黑盖）
     const rp = new THREE.Group();
     rp.position.set(0.37, 1.32, 0.5); rp.rotation.set(-0.1, 0.42, 0);
@@ -1715,14 +1735,16 @@ const P_HEAD_Y = PCFG.headY;
       sp.add(mesh(new THREE.SphereGeometry(0.085, 12, 8), mPouch, 0, 0.1, 0.01)); // 圆顶（软包感）
       sp.add(mesh(new THREE.BoxGeometry(0.028, 0.08, 0.02), mBlack, 0, -0.01, -0.062));
       visual.add(sp);
+      // 腰带后包 ×2（参考图背视图：板下腰带后段大包）
+      const bp = new THREE.Group();
+      bp.position.set(sd * 0.34, 0.58, -0.5);
+      bp.rotation.y = sd * 0.28;
+      bp.add(mesh(new THREE.BoxGeometry(0.19, 0.2, 0.12), mPouch, 0, 0, 0));
+      bp.add(mesh(new THREE.BoxGeometry(0.2, 0.05, 0.13), mLid, 0, 0.115, 0));
+      bp.add(mesh(new THREE.BoxGeometry(0.03, 0.08, 0.02), mBlack, 0, -0.02, 0.062));
+      visual.add(bp);
     });
-    // 背后翻盖大包
-    const back = new THREE.Group();
-    back.position.set(0, 1.22, -0.58); back.rotation.x = 0.08;
-    back.add(mesh(new THREE.BoxGeometry(0.2, 0.22, 0.11), mPouch, 0, 0, 0));
-    back.add(mesh(new THREE.BoxGeometry(0.21, 0.06, 0.12), mLid, 0, 0.1, 0.004));
-    back.add(mesh(new THREE.BoxGeometry(0.03, 0.1, 0.02), mStrap, 0, -0.02, 0.055));
-    visual.add(back);
+    // （背后小翻盖包已由 MOLLE 大板取代——参考图背视图板面完整无小包）
   })();
 
   /* ---------- 武器：黑色科幻步枪（程序化建模 createWeaponModel，与 weapon/ 展示项目同源） ---------- */
