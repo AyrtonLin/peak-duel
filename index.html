@@ -311,7 +311,7 @@ const Sfx = (() => {
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
-  function tone(f, f2, dur, type, vol, delay) {
+  function tone(f, f2, dur, type, vol, delay, attack) {
     if (!ctx) return;
     const t0 = ctx.currentTime + (delay || 0);
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -319,12 +319,12 @@ const Sfx = (() => {
     o.frequency.setValueAtTime(Math.max(1, f), t0);
     if (f2) o.frequency.exponentialRampToValueAtTime(Math.max(1, f2), t0 + dur);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(vol || 0.25, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(vol || 0.25, t0 + (attack || 0.012));
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     o.connect(g); g.connect(master);
     o.start(t0); o.stop(t0 + dur + 0.06);
   }
-  function noise(dur, vol, fc, type, delay, f2) {
+  function noise(dur, vol, fc, type, delay, f2, attack) {
     if (!ctx) return;
     const t0 = ctx.currentTime + (delay || 0);
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
@@ -334,7 +334,7 @@ const Sfx = (() => {
     if (f2) f.frequency.exponentialRampToValueAtTime(Math.max(10, f2), t0 + dur);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(vol || 0.25, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(vol || 0.25, t0 + (attack || 0.01));
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     src.connect(f); f.connect(g); g.connect(master);
     src.start(t0); src.stop(t0 + dur + 0.06);
@@ -342,10 +342,22 @@ const Sfx = (() => {
   let rayOsc = null, rayOsc2 = null, rayGain = null, rayLfo = null;
   return {
     init,
-    shoot() { // 枪响三层：脆响「嚓」+ 低频尾「磅」+ 身体「咚」
-      noise(0.05, 0.35, 2800, 'bandpass');
-      noise(0.16, 0.22, 1000, 'lowpass', 0.01, 160);
-      tone(190, 50, 0.12, 'square', 0.12, 0.005);
+    shoot() { // 真实枪声六层（户外步枪）：
+      const j = 0.9 + Math.random() * 0.2; // 逐发响度微差（真实弹药差异）
+      // ① 超音速爆鸣 crack：1ms 起音的高频窄爆（真实枪声的「啪」瞬态）
+      noise(0.014, 0.5 * j, 3300, 'bandpass', 0, 2200, 0.001);
+      // ② 膛压低频 punch：150→52Hz 快速下坠正弦（胸口闷响）
+      tone(150, 52, 0.14, 'sine', 0.4 * j, 0, 0.002);
+      // ③ 次低频 body：95→40Hz 三角波尾
+      tone(95, 40, 0.19, 'triangle', 0.24 * j, 0.004, 0.004);
+      // ④ 枪口冲击噪声：中频爆风（0→220Hz 下扫低通）
+      noise(0.06, 0.3 * j, 950, 'lowpass', 0, 220, 0.002);
+      // ⑤ 枪机往复 clack：+65ms/+88ms 两声金属轻响（与拉机柄回位动画同步）
+      noise(0.006, 0.13 * j, 2900, 'bandpass', 0.065, 2000, 0.001);
+      noise(0.005, 0.1 * j, 2100, 'bandpass', 0.088, 1500, 0.001);
+      // ⑥ 户外滚音回响：+110ms/+230ms 两记低通弱回（场地反射远场感）
+      noise(0.16, 0.1 * j, 720, 'lowpass', 0.11, 240);
+      noise(0.3, 0.07 * j, 470, 'lowpass', 0.23, 160);
     },
     hit() { // 受击短促分层 splat：主「啪」+ 次层「咕」+ 湿润噪声
       tone(520, 240, 0.07, 'triangle', 0.22);
