@@ -1420,9 +1420,9 @@ const P_HEAD_Y = PCFG.headY;
   skull.scale.set(1.04, 0.94, 0.98);
   P.head.add(skull);
   // 面部平滑：去吻部球组（参考图无独立口鼻分块），仅以鼻头作立体焦点
-  // 大锈棕鼻头（参考图的视觉焦点）：居中低位、宽椭圆、微光泽
-  const nose = mesh(new THREE.SphereGeometry(0.13, 16, 12), mNose, 0, -0.13, 0.5);
-  nose.scale.set(1.4, 1.0, 0.78);
+  // 大锈棕鼻头（参考图：面部主体焦点，大椭圆低棕高光）：居中放大
+  const nose = mesh(new THREE.SphereGeometry(0.155, 16, 12), mNose, 0, -0.1, 0.5);
+  nose.scale.set(1.5, 1.05, 0.8);
   P.head.add(nose);
   // 咧嘴笑（参考图：鼻下褐色开口腔，圆角豁笑露出内腔）
   const mMouthIn = std(0x692b14, { roughness: 0.6 });        // 口腔内暗棕褐（哑光）
@@ -1440,10 +1440,10 @@ const P_HEAD_Y = PCFG.headY;
     eg.position.set(sd * 0.165, 0.07, 0.45);
     eg.rotation.y = sd * 0.16;
     eg.scale.setScalar(PCFG.eyeSize);
-    const iris = mesh(new THREE.SphereGeometry(0.078, 14, 12), mIris);
+    const iris = mesh(new THREE.SphereGeometry(0.086, 14, 12), mIris);
     iris.scale.set(0.92, 1.16, 0.55);
     eg.add(iris);
-    const pupil = mesh(new THREE.SphereGeometry(0.052, 10, 8), mPupil, 0, -0.008, 0.044);
+    const pupil = mesh(new THREE.SphereGeometry(0.058, 10, 8), mPupil, 0, -0.008, 0.044);
     pupil.scale.set(0.95, 1.1, 0.5);
     eg.add(pupil);
     eg.add(mesh(new THREE.SphereGeometry(0.02, 8, 6), mGlint, 0.022, 0.04, 0.075),
@@ -1464,16 +1464,16 @@ const P_HEAD_Y = PCFG.headY;
       // 耳罩臂：侧轨 → 耳罩
       hs.add(limb([sd * 0.52, 0.1, 0.06], [sd * 0.59, 0.0, 0.09], 0.022, 0.022, mStrap));
       // 耳罩：卡其大盘（参考图战术耳机）+ 深色胶圈 + 黑中心盖 + 侧下 PTT 盒
-      const cup = mesh(new THREE.CylinderGeometry(0.14, 0.15, 0.11, 16), mTan, sd * 0.63, -0.01, 0.09);
+      const cup = mesh(new THREE.CylinderGeometry(0.155, 0.165, 0.12, 16), mTan, sd * 0.63, -0.01, 0.09);
       cup.rotation.z = sd * Math.PI / 2;
       hs.add(cup);
-      const ring = mesh(new THREE.TorusGeometry(0.108, 0.034, 8, 16), mBlack, sd * 0.685, -0.01, 0.09);
+      const ring = mesh(new THREE.TorusGeometry(0.118, 0.036, 8, 16), mBlack, sd * 0.69, -0.01, 0.09);
       ring.rotation.y = sd * Math.PI / 2;
       hs.add(ring);
-      const cap = mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.035, 10), mBlack, sd * 0.695, -0.01, 0.09);
+      const cap = mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.038, 10), mBlack, sd * 0.7, -0.01, 0.09);
       cap.rotation.z = sd * Math.PI / 2;
       hs.add(cap);
-      hs.add(mesh(new THREE.BoxGeometry(0.1, 0.15, 0.08), mBlack, sd * 0.66, -0.2, 0.02)); // PTT/线缆盒
+      hs.add(mesh(new THREE.BoxGeometry(0.12, 0.2, 0.09), mBlack, sd * 0.67, -0.24, 0.02)); // PTT/线缆盒
     });
     // 麦克风：左耳罩出发的弯臂延伸至鼻头旁（球珠链 + 泡棉黑头，全程避开鼻头体积）
     const micPts = bez3([-0.66, -0.02, 0.14], [-0.6, -0.32, 0.52], [-0.23, -0.25, 0.61], 7);
@@ -1593,22 +1593,21 @@ const P_HEAD_Y = PCFG.headY;
   P.armR = buildArm(1);
   visual.add(P.armL, P.armR);
 
-  /* ---------- createTail：参考图大尾巴（粗根后伸、中段后甩、末段内勾，多节点平滑） ---------- */
+  /* ---------- createTail：参考图三视图尾巴（背视图：尾根下垂触地三脚支撑；侧视图：贴地后甩上翘） ---------- */
   (function createTail() {
     const tail = new THREE.Group();
     tail.position.set(0, 0.78, -0.45);
-    const w = PCFG.tailCurve;
     const pts = [
-      [0, -0.1, 0.13],
-      [0, -0.02, -0.2],
-      [0, 0.14, -0.48],
-      [0, 0.36, -0.66],
-      [0, 0.62, -0.7],
-      [0, 0.84, -0.55]
+      [0, -0.06, 0.18],
+      [0, -0.32, -0.05],
+      [0, -0.62, -0.16],
+      [0, -0.58, -0.48],
+      [0, -0.1, -0.68],
+      [0, 0.52, -0.62]
     ];
-    const radii = [0.22, 0.205, 0.185, 0.155, 0.115, 0.07];
+    const radii = [0.24, 0.215, 0.185, 0.15, 0.11, 0.072];
     for (let i = 0; i < pts.length - 1; i++) tail.add(limb(pts[i], pts[i + 1], radii[i], radii[i + 1], mShade));
-    tail.add(mesh(new THREE.SphereGeometry(0.22, 12, 10), mShade, pts[0][0], pts[0][1], pts[0][2]));
+    tail.add(mesh(new THREE.SphereGeometry(0.24, 12, 10), mShade, pts[0][0], pts[0][1], pts[0][2]));
     P.tail = tail;
     visual.add(tail);
   })();
@@ -1632,7 +1631,7 @@ const P_HEAD_Y = PCFG.headY;
       st.rotation.y = Math.PI / 2;
       st.rotation.z = sd * 1.2;
       visual.add(st);
-      visual.add(mesh(new THREE.BoxGeometry(0.075, 0.11, 0.045), mBuckle, sd * 0.3, 1.42, 0.58)); // 前扣具
+      visual.add(mesh(new THREE.BoxGeometry(0.11, 0.14, 0.055), mBuckle, sd * 0.3, 1.42, 0.58)); // 前扣具
     });
     // 板十字：前胸竖织带 + 横织带（贴壳表面）
     [-1, 1].forEach(sd => {
@@ -1648,6 +1647,18 @@ const P_HEAD_Y = PCFG.headY;
       const pts = bez3([sd * 0.14, 1.58, -0.42], [sd * 0.15, 1.2, -0.66], [sd * 0.05, 0.94, -0.6], 5);
       for (let i = 0; i < pts.length - 1; i++) visual.add(limb(pts[i], pts[i + 1], 0.03, 0.03, mStrap));
     });
+    // 背部 MOLLE 大板（参考图背视图：大迷彩板 + 三横织带 + 四角黑扣）
+    const molle = new THREE.Group();
+    molle.position.set(0, 1.12, -0.66);
+    molle.rotation.x = 0.14;
+    molle.add(mesh(new THREE.BoxGeometry(0.86, 0.62, 0.06), mGear, 0, 0, 0));
+    [-0.18, 0, 0.18].forEach(ry => {
+      molle.add(mesh(new THREE.BoxGeometry(0.82, 0.035, 0.055), mStrap, 0, ry, 0.033));
+    });
+    [[-0.38, 0.25], [0.38, 0.25], [-0.38, -0.25], [0.38, -0.25]].forEach(c => {
+      molle.add(mesh(new THREE.BoxGeometry(0.07, 0.07, 0.035), mBuckle, c[0], c[1], 0.032));
+    });
+    visual.add(molle);
   })();
 
   /* ---------- createPouches：胸前弹匣袋 / 工具袋 + 腰带侧包（独立厚度+盖片+扣具） ---------- */
