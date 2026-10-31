@@ -1317,7 +1317,7 @@ const PCFG = {
   bodyR: 0.72, bodyY: 1.02,      // 躯干半径 / 中心高
   headR: 0.50, headY: 1.88,      // 头部半径 / 中心高（Q版大头）
   eyeSize: 1.0,                  // 眼睛整体缩放
-  earLen: 1.15, earTilt: 0.12,   // 耳朵长度倍率 / 外倾角（弧度）——参考图对称长圆耳
+  earLen: 0.78, earTilt: 0.12,   // 耳朵长度倍率 / 外倾角（弧度）——参考图短圆耳（圆润饱满不长尖）
   helmetSize: 1.0,               // 头盔整体缩放
   vestThick: 0.075,              // 背心壳与躯干间隙（背心厚度）
   pouchCount: 3,                 // 胸前弹匣袋数量
@@ -1498,9 +1498,9 @@ const P_HEAD_Y = PCFG.headY;
     const S = PCFG.helmetSize;
     const helm = new THREE.Group();
     helm.scale.setScalar(S);
-    // 壳体：纬向球带（贴合头部曲率覆盖头顶，避开眼部）
-    const shell = new THREE.Mesh(new THREE.SphereGeometry(PCFG.headR + 0.05, 26, 14, 0, TAU, 0, Math.PI * 0.4), mHelm);
-    shell.scale.set(1.05, 0.86, 1.07);
+    // 壳体：纬向球带（加深覆盖全头顶：参考图盔完整包住头顶不露脑壳）
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(PCFG.headR + 0.05, 26, 14, 0, TAU, 0, Math.PI * 0.52), mHelm);
+    shell.scale.set(1.05, 0.95, 1.07);
     helm.add(shell);
     // 檐圈（收边）
     const rim = mesh(new THREE.TorusGeometry(PCFG.headR + 0.04, 0.024, 8, 30), mHelm, 0, PCFG.headR * 0.28, 0);
@@ -2094,7 +2094,7 @@ const P_HEAD_Y = PCFG.headY;
   P.flashLight.position.copy(P.muzzle.position);
   P.gun.add(P.flashLight);
 
-  /* ---------- 耳朵：参考图长圆耳（左右完全对称镜像，耳基从盔沿干净探出） ---------- */
+  /* ---------- 耳朵：参考图短圆耳（左右完全对称镜像，饱满圆润、端头圆滑不长尖） ---------- */
   [-1, 1].forEach(sd => {
     const ear = new THREE.Group();
     const L = PCFG.earLen;
@@ -2103,15 +2103,15 @@ const P_HEAD_Y = PCFG.headY;
     ear.rotation.x = -0.04;
     const pts = [
       [0, 0, 0],
-      [0, 0.22 * L, 0.005],
-      [sd * 0.05 * L, 0.42 * L, 0.012],
-      [sd * 0.12 * L, 0.55 * L, 0.008],
-      [sd * 0.16 * L, 0.63 * L, 0.005]
+      [0, 0.26 * L, 0.005],
+      [sd * 0.045 * L, 0.5 * L, 0.01],
+      [sd * 0.09 * L, 0.66 * L, 0.008]
     ];
-    const radii = [0.13, 0.112, 0.098, 0.088, 0.078];
+    const radii = [0.155, 0.15, 0.14, 0.118];
     for (let i = 0; i < pts.length - 1; i++) ear.add(limb(pts[i], pts[i + 1], radii[i], radii[i + 1], mSkin));
+    ear.add(mesh(new THREE.SphereGeometry(0.118, 12, 10), mSkin, pts[3][0], pts[3][1], pts[3][2])); // 圆滑端头
     const inner = mesh(new THREE.SphereGeometry(0.066, 10, 8), mEarIn, sd * 0.02 * L, 0.3 * L, 0.07);
-    inner.scale.set(0.6, 2.2, 0.45);
+    inner.scale.set(0.6, 1.9, 0.45);
     ear.add(inner);
     P.head.add(ear);
   });
