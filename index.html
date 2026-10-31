@@ -1597,21 +1597,22 @@ const P_HEAD_Y = PCFG.headY;
   P.armR = buildArm(1);
   visual.add(P.armL, P.armR);
 
-  /* ---------- createTail：参考图三视图尾巴（背视图：尾根下垂触地三脚支撑；侧视图：贴地后甩上翘） ---------- */
+  /* ---------- createTail：参考图三视图尾巴（短粗圆润萝卜状：尾根下垂三脚支撑、贴地后甩上翘、圆滑尾尖） ---------- */
   (function createTail() {
     const tail = new THREE.Group();
     tail.position.set(0, 0.78, -0.45);
     const pts = [
-      [0, -0.06, 0.18],
-      [0, -0.32, -0.05],
-      [0, -0.62, -0.16],
-      [0, -0.58, -0.48],
-      [0, -0.1, -0.68],
-      [0, 0.52, -0.62]
+      [0, -0.05, 0.15],
+      [0, -0.26, -0.05],
+      [0, -0.42, -0.28],
+      [0, -0.36, -0.52],
+      [0, -0.02, -0.6],
+      [0, 0.22, -0.54]
     ];
-    const radii = [0.24, 0.215, 0.185, 0.15, 0.11, 0.072];
+    const radii = [0.26, 0.245, 0.215, 0.175, 0.13, 0.09];
     for (let i = 0; i < pts.length - 1; i++) tail.add(limb(pts[i], pts[i + 1], radii[i], radii[i + 1], mShade));
-    tail.add(mesh(new THREE.SphereGeometry(0.24, 12, 10), mShade, pts[0][0], pts[0][1], pts[0][2]));
+    tail.add(mesh(new THREE.SphereGeometry(0.26, 12, 10), mShade, pts[0][0], pts[0][1], pts[0][2]));
+    tail.add(mesh(new THREE.SphereGeometry(0.09, 10, 8), mShade, pts[5][0], pts[5][1], pts[5][2])); // 圆滑尾尖
     P.tail = tail;
     visual.add(tail);
   })();
