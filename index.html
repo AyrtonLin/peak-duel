@@ -4801,8 +4801,8 @@ function startGame() {
 const DIFFS = [
   { name: '简单', mult: 1.0, stun: 2.0, hpM: 1.0, color: '#7ec96a', desc: '当前版本数值 · 技能伤害 ×1.0 · 弹飞眩晕 2.0 秒 · 血量 200' },
   { name: '普通', mult: 1.5, stun: 2.6, hpM: 1.25, color: '#5ba8e8', desc: '技能伤害 ×1.5 · 弹飞眩晕 2.6 秒 · 血量 250' },
-  { name: '困难', mult: 2.0, stun: 3.2, hpM: 1.5, color: '#f0a23c', desc: '技能伤害 ×2.0 · 弹飞眩晕 3.2 秒 · 血量 300' },
-  { name: '地狱', mult: 2.5, stun: 3.8, hpM: 1.75, color: '#e85b5b', desc: '技能伤害 ×2.5 · 弹飞眩晕 3.8 秒 · 血量 350 · 慎入！' }
+  { name: '困难', mult: 4.0, stun: 3.2, hpM: 1.5, color: '#f0a23c', desc: '技能伤害 ×4.0 · 弹飞眩晕 3.2 秒 · 血量 300' },
+  { name: '地狱', mult: 5.0, stun: 3.8, hpM: 5.0, color: '#e85b5b', desc: '技能伤害 ×5.0 · 弹飞眩晕 3.8 秒 · 血量 1000 · 慎入！' }
 ];
 let diffIdx = 0;
 try { diffIdx = clamp(Math.round(+localStorage.getItem('pd_diff')) || 0, 0, DIFFS.length - 1); } catch (e) {}
