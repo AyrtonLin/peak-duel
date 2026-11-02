@@ -69,6 +69,17 @@ body.playing #hud { display: block; }
 /* ---------- 菜单浮层叉号（点击 = 游戏正式开始） ---------- */
 .menuX { position: absolute; top: 14px; right: 16px; width: 44px; height: 44px; border: none; border-radius: 50%; background: rgba(255,255,255,.16); color: #fff; font-size: 22px; font-weight: 700; cursor: pointer; pointer-events: auto; line-height: 1; z-index: 5; transition: background .15s, transform .15s; }
 .menuX:hover { background: rgba(255,255,255,.32); transform: scale(1.08); }
+/* ---------- 设置面板（音效/音乐音量） ---------- */
+.gearBtn { position: absolute; top: 14px; left: 16px; width: 44px; height: 44px; border: none; border-radius: 50%; background: rgba(255,255,255,.16); color: #fff; font-size: 21px; cursor: pointer; pointer-events: auto; z-index: 5; transition: background .15s, transform .15s; line-height: 1; }
+.gearBtn:hover { background: rgba(255,255,255,.32); transform: scale(1.08) rotate(30deg); }
+#setPanel { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center; background: rgba(4,8,14,.55); backdrop-filter: blur(4px); pointer-events: auto; }
+#setPanel .setCard { background: rgba(16,22,30,.93); border: 1px solid rgba(255,255,255,.18); border-radius: 16px; padding: 26px 34px; width: min(430px, 90vw); box-shadow: 0 18px 50px rgba(0,0,0,.6); text-align: center; }
+#setPanel h3 { color: #ffd76a; margin: 0 0 18px; letter-spacing: 6px; font-size: 22px; text-shadow: 0 2px 6px #000; }
+.volRow { display: flex; align-items: center; gap: 14px; margin: 15px 0; }
+.volRow .vl { width: 76px; text-align: left; color: #cfe6ff; font-size: 14px; font-weight: 600; flex: none; }
+.volRow input[type=range] { flex: 1; accent-color: #f5a623; cursor: pointer; height: 22px; }
+.volRow .vp { width: 54px; text-align: right; color: #ffe9b0; font-size: 13px; flex: none; }
+#setClose { margin-top: 18px; font-size: 16px; padding: 9px 42px; letter-spacing: 4px; }
 .sub { color: #ffe9b0; font-size: 18px; letter-spacing: 4px; margin: 10px 0 20px; text-shadow: 0 2px 6px #000; }
 .cards { display: flex; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
 .card { width: 96px; }
@@ -177,6 +188,7 @@ body.touch.portrait #rotateHint { display: block; }
 </div>
 <div id="startScreen" class="screen" style="display:none">
   <button class="menuX" id="menuXBtn" type="button" title="开始游戏">✕</button>
+  <button class="gearBtn" id="gearBtn" type="button" title="设置">⚙</button>
   <h1 class="title">巅峰对决</h1>
   <div class="sub">肥嘟嘟 VS 奶蛙 · 背部无敌，正面开战</div>
   <div class="cards">
@@ -215,6 +227,14 @@ body.touch.portrait #rotateHint { display: block; }
   </div>
   <div class="hint">建议使用 Chrome / Edge 全屏游玩 · 需联网加载 Three.js · 触屏设备自动启用虚拟摇杆<br>手机与电脑连同一 WiFi：电脑上双击「手机访问.bat」，按手机浏览器打开提示的网址即可用手机游玩</div>
 </div>
+<div id="setPanel">
+  <div class="setCard">
+    <h3>设置</h3>
+    <div class="volRow"><span class="vl">音效音量</span><input type="range" id="sfxRange" min="0" max="100" value="100" step="1"><span class="vp" id="sfxVolLbl">100%</span></div>
+    <div class="volRow"><span class="vl">音乐音量</span><input type="range" id="musRange" min="0" max="100" value="100" step="1"><span class="vp" id="musVolLbl">100%</span></div>
+    <button class="bigBtn" id="setClose" type="button">关闭</button>
+  </div>
+</div>
 <div id="endScreen" class="screen" style="display:none">
   <h2 id="resultTitle"></h2>
   <div id="resultStats"></div>
@@ -222,6 +242,7 @@ body.touch.portrait #rotateHint { display: block; }
   <button class="bigBtn" id="menuBtn" type="button">返回菜单</button>
 </div>
 <div id="pauseScreen" class="screen" style="display:none">
+  <button class="gearBtn" id="gearBtn2" type="button" title="设置" style="left:auto; right:16px;">⚙</button>
   <h2>已暂停</h2>
   <p>游戏画面已静止 · 点击「继续战斗」锁定鼠标回到战场</p>
   <button class="bigBtn" id="btnResume" type="button">继续战斗</button>
@@ -316,13 +337,18 @@ document.querySelectorAll('.cardImg').forEach(img => {
 });
 /* ================= 音效（Web Audio 合成，无外部资源） ================= */
 const Sfx = (() => {
-  let ctx = null, master = null, noiseBuf = null;
+  let ctx = null, master = null, noiseBuf = null, userVol = null;
+  function setVol(v) { // 用户音效音量（0~1，基准 0.5 上做缩放；ctx 未建时记为待应用值）
+    v = Math.max(0, Math.min(1, +v || 0));
+    userVol = v;
+    if (master && ctx) master.gain.setTargetAtTime(0.5 * v, ctx.currentTime, 0.02);
+  }
   function init() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     ctx = new AC();
-    master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+    master = ctx.createGain(); master.gain.value = 0.5 * (userVol === null ? 1 : userVol); master.connect(ctx.destination);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -358,6 +384,8 @@ const Sfx = (() => {
   let rayOsc = null, rayOsc2 = null, rayGain = null, rayLfo = null;
   return {
     init,
+    setVol,
+    masterGain() { return master; },
     ac() { return ctx; }, // 供 BGM 模块复用同一 AudioContext
     shoot() { // 真实枪声六层（户外步枪）：
       const j = 0.9 + Math.random() * 0.2; // 逐发响度微差（真实弹药差异）
@@ -486,7 +514,12 @@ const Music = (() => {
     [112, 1174.66, 6], [120, 880.00, 3], [124, 587.33, 3]]);
   const MELS = [MEL1, MEL2, MEL3];
   // —— 声部链（真实乐队录音配置：双轨节奏吉他 L/R + 中央主音/贝斯 + 鼓房总线 + 房间卷积混响 + 母带压缩） ——
-  let gtrL = null, gtrR = null, leadIn = null, bassIn = null, drumIn = null, revSend = null;
+  let gtrL = null, gtrR = null, leadIn = null, bassIn = null, drumIn = null, revSend = null, musVol = null, musVolVal = 1;
+  function setVol(v) { // 用户音乐音量（0~1，经独立增益节点；与 start/stop 淡入淡出互不干扰）
+    v = Math.max(0, Math.min(1, +v || 0));
+    musVolVal = v;
+    if (musVol && ctx) musVol.gain.setTargetAtTime(v, ctx.currentTime, 0.03);
+  }
   function distCurveOf(k) { // tanh 软削波过载曲线（电子管失真近似）
     const n = 257, c = new Float32Array(n), norm = Math.tanh(k);
     for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / norm; }
@@ -496,7 +529,8 @@ const Music = (() => {
     if (gtrL) return;
     const comp = ctx.createDynamicsCompressor(); // 母带 glue：轻压出「成唱片」的密度
     comp.threshold.value = -14; comp.ratio.value = 2.5; comp.attack.value = 0.008; comp.release.value = 0.22; comp.knee.value = 9;
-    out.connect(comp); comp.connect(ctx.destination);
+    musVol = ctx.createGain(); musVol.gain.value = musVolVal; // 用户音乐音量节点（压缩器之后，调节不改变压缩行为）
+    out.connect(comp); comp.connect(musVol); musVol.connect(ctx.destination);
     // 房间卷积混响（程序生成脉冲响应）：干声合成器的最大破绽——真实录音永远有房间
     const irN = Math.floor(ctx.sampleRate * 0.55), ir = ctx.createBuffer(2, irN, ctx.sampleRate);
     for (let ch = 0; ch < 2; ch++) {
@@ -662,7 +696,7 @@ const Music = (() => {
       } catch (e) {}
     }
   }
-  return { start, stop, setPhase };
+  return { start, stop, setPhase, setVol, volNode() { return musVol; } };
 })();
 /* ================= 渲染基础与场景 ================= */
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
@@ -4805,6 +4839,35 @@ dom.splashScreen.addEventListener('click', () => { // 图片页轻点 → 菜单
   dom.startScreen.style.display = '';
 });
 dom.menuXBtn.addEventListener('click', startGame); // 叉号 = 游戏正式开始
+/* ================= 音量设置（滑杆联动 + localStorage 持久化） ================= */
+(function () {
+  const load = (k, d) => { try { const v = parseFloat(localStorage.getItem(k)); return isNaN(v) ? d : Math.max(0, Math.min(1, v)); } catch (e) { return d; } };
+  const save = (k, v) => { try { localStorage.setItem(k, String(v)); } catch (e) {} };
+  const sfx0 = load('pd_vol_sfx', 1), mus0 = load('pd_vol_mus', 1);
+  Sfx.setVol(sfx0); Music.setVol(mus0); // ctx 未建时模块内部记为待应用值，init/buildChains 时生效
+  const sr = document.getElementById('sfxRange'), mr = document.getElementById('musRange');
+  const sl = document.getElementById('sfxVolLbl'), ml = document.getElementById('musVolLbl');
+  const fmt = v => Math.round(v * 100) + '%';
+  sr.value = Math.round(sfx0 * 100); sl.textContent = fmt(sfx0);
+  mr.value = Math.round(mus0 * 100); ml.textContent = fmt(mus0);
+  let lastBlip = 0;
+  sr.addEventListener('input', () => {
+    const v = sr.value / 100;
+    Sfx.setVol(v); save('pd_vol_sfx', v); sl.textContent = fmt(v);
+    const now = performance.now();
+    if (now - lastBlip > 180) { lastBlip = now; Sfx.rayTick(); } // 调节试听（软泡泡音，节流 180ms）
+  });
+  mr.addEventListener('input', () => {
+    const v = mr.value / 100;
+    Music.setVol(v); save('pd_vol_mus', v); ml.textContent = fmt(v);
+  });
+  const openPanel = () => { dom.setPanel.style.display = 'flex'; };
+  const closePanel = () => { dom.setPanel.style.display = 'none'; };
+  [dom.gearBtn, dom.gearBtn2].forEach(b => b && b.addEventListener('click', e => { e.stopPropagation(); openPanel(); }));
+  dom.setClose.addEventListener('click', closePanel);
+  dom.setPanel.addEventListener('click', e => { if (e.target === dom.setPanel) closePanel(); }); // 点背板关闭
+  window.addEventListener('keydown', e => { if (e.key === 'Escape' && dom.setPanel.style.display === 'flex') closePanel(); }); // ESC 关面板
+})();
 dom.startBtn.addEventListener('click', startGame);
 dom.restartBtn.addEventListener('click', startGame);
 dom.menuBtn.addEventListener('click', () => {
